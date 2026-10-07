@@ -3,7 +3,9 @@
 アプリは Go 1.27.1 を使う。
 `go.mod` と `go.sum` は依存バージョンとチェックサムを固定する。
 この表は `go list -m -json all` の全モジュールを記録する。
-実行時の分類は `go list -deps -json ./cmd/mezzanine` を使う。
+実行時の分類はLinux amd64の `CGO_ENABLED=0 go list -deps -json ./cmd/mezzanine` を使う。
+実行バイナリはGo標準ライブラリと13の外部モジュールを含む。
+本体のMIT採用と第三者条件の区別は [ライセンス方針](LICENSING.md) を参照する。
 ライセンス名は配布元の原文を参照する。
 配布者は `THIRD_PARTY_NOTICES.txt` をバイナリと配布する。
 
@@ -17,7 +19,7 @@
 | `github.com/google/pprof` | `v0.0.0-20250317173921-a4b03ec1a45e` | Apache-2.0 | 間接・開発用 |
 | `github.com/google/uuid` | `v1.6.0` | BSD-3-Clause | 実行時 |
 | `github.com/gorilla/feeds` | `v1.2.0` | BSD-3-Clause | 実行時 |
-| `github.com/hashicorp/golang-lru/v2` | `v2.0.7` | MPL-2.0 | 間接・開発用 |
+| `github.com/hashicorp/golang-lru/v2` | `v2.0.7` | MPL-2.0 | libcのテスト経由。本番バイナリに含まない |
 | `github.com/kr/pretty` | `v0.3.1` | MIT | 間接・開発用 |
 | `github.com/kr/text` | `v0.2.0` | MIT | 間接・開発用 |
 | `github.com/kylelemons/godebug` | `v1.1.0` | Apache-2.0 | 間接・開発用 |

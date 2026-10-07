@@ -11,7 +11,9 @@ mezzanineは「中二階」の公開リレーを実装する。
 
 初版は一つのページと一つのcollectionだけを扱う。
 投稿クライアント、GUI、非公開のあだ名、複数リレーの収集とマージは対象外とする。
-更新と削除は再通知まで反映しない。
+リレーはsource URLごとの最初の検証成功スナップショットを固定する。
+リレーは再通知でも原本の更新・所属移動・削除を反映しない。
+スナップショットは通知後の取得・検証時点の内容とする。
 
 ## Goで起動
 
@@ -37,12 +39,16 @@ curl --fail http://127.0.0.1:8080/healthz
 ```sh
 cp .env.example .env
 # 運用者は .env の PUBLIC_URL を変更する。
+# HOST_DATA_DIR を変更する場合、運用者は以下も同じ保存先へ置き換える。
+sudo install -d -o 65532 -g 65532 -m 0750 ./data
 docker compose config
 docker compose up -d --build
 ```
 
 Dockerfileは非rootの単一コンテナを作る。
-Composeは保存用の名前付きボリュームを付ける。
+Composeはホストの `./data` を `/data` へバインドマウントする。
+運用者は `HOST_DATA_DIR` でホスト側の保存先を変更する。
+Composeは存在しないホストディレクトリを自動作成しない。
 ComposeはHTTPを127.0.0.1:8080へ公開する。
 運用者は既存のプロキシで公開HTTPSを終端する。
 Docker実行検証の未完了事項は検証記録を参照する。
@@ -76,3 +82,10 @@ OpenSpecはspec-driven方式を使う。
 `openspec/changes/build-public-collection-relay/` は初版の仕様差分、設計、実装タスクを保持する。
 Docker実行の未検証タスクは未完了のまま残す。
 アーカイブは全ての完了条件を検証した後に扱う。
+
+## ライセンス
+
+mezzanine本体は [MIT License](LICENSE) で公開する。
+第三者の依存物は元のライセンス条件を保持する。
+配布時の区別は [ライセンス方針](docs/LICENSING.md) を参照する。
+コンテナのDebian資産は本体のMITとは別条件とする。
