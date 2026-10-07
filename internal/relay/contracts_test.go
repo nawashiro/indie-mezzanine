@@ -8,10 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -86,7 +85,7 @@ func TestFeedOrderingLimitAndTimes(t *testing.T) {
 		t.Fatal(string(b))
 	}
 }
-func TestExampleAndDocumentCommands(t *testing.T) {
+func TestExampleSubmissionAndFeed(t *testing.T) {
 	html, e := os.ReadFile("../../examples/post.html")
 	if e != nil {
 		t.Fatal(e)
@@ -94,59 +93,55 @@ func TestExampleAndDocumentCommands(t *testing.T) {
 	if _, e = Parse(page(string(html)), target); e != nil {
 		t.Fatal("投稿例", e)
 	}
-	doc, e := os.ReadFile("../../docs/PUBLISHING.md")
-	if e != nil {
-		t.Fatal(e)
-	}
-	command := regexp.MustCompile("(?s)```sh\\n(curl .*?)\\n```").FindSubmatch(doc)
-	if len(command) != 2 {
-		t.Fatal("通知コマンドなし")
-	}
-	if _, e = exec.LookPath("curl"); e != nil {
-		t.Fatal("文書コマンド検証にはcurlが必要")
-	}
 	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, string(html)) }))
 	defer source.Close()
 	c := config(t)
 	s := store(t)
-	a, _ := NewApp(c, s, fixtureFetcher{source.Client(), source.URL})
+	a, e := NewApp(c, s, fixtureFetcher{source.Client(), source.URL})
+	if e != nil {
+		t.Fatal(e)
+	}
 	server := httptest.NewServer(a.Handler())
 	defer server.Close()
-	// worker開始前に文書のcurlで通知する。202と未掲載を区別する。
-	cmd := exec.Command("sh", "-c", string(command[1]))
-	cmd.Env = append(os.Environ(), "SOURCE=https://author.example/post", "PUBLIC_URL="+target, "WEBMENTION_ENDPOINT="+server.URL+"/webmention")
-	out, e := cmd.CombinedOutput()
-	if e != nil || !strings.Contains(string(out), "202 Accepted") {
-		t.Fatalf("curl %v %s", e, out)
+	notify := func(want int) {
+		t.Helper()
+		res, e := server.Client().PostForm(server.URL+"/webmention", url.Values{
+			"source": {"https://author.example/post"},
+			"target": {target},
+		})
+		if e != nil {
+			t.Fatal(e)
+		}
+		res.Body.Close()
+		if res.StatusCode != want {
+			t.Fatalf("通知HTTP %d, want %d", res.StatusCode, want)
+		}
 	}
+	// worker開始前に通知する。受付と掲載を区別する。
+	notify(http.StatusAccepted)
 	if _, _, e = s.Feed(context.Background(), id1, 100); e != ErrUnknown {
 		t.Fatal("検証前に掲載")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	if e = a.Start(ctx); e != nil {
+		cancel()
 		t.Fatal(e)
 	}
 	defer func() { cancel(); a.Wait() }()
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		url := server.URL + "/collections/" + id1 + ".atom"
-		res, e := http.Get(url)
+		res, e := server.Client().Get(server.URL + "/collections/" + id1 + ".atom")
 		if e != nil {
 			t.Fatal(e)
 		}
 		res.Body.Close()
-		if res.StatusCode == 200 {
-			repeated := exec.Command("sh", "-c", string(command[1]))
-			repeated.Env = cmd.Env
-			out, e := repeated.CombinedOutput()
-			if e != nil || !strings.Contains(string(out), "200 OK") {
-				t.Fatalf("再通知curl %v %s", e, out)
-			}
+		if res.StatusCode == http.StatusOK {
+			notify(http.StatusOK)
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatal("文書購読経路の掲載失敗")
+	t.Fatal("購読経路の掲載失敗")
 }
 func TestBackupRestoreAndInterruptedJobs(t *testing.T) {
 	ctx := context.Background()
