@@ -1,6 +1,10 @@
-# mezzanine
+# indie-mezzanine
 
-mezzanineは、公開した記事をコレクション別のAtomフィードにまとめるアプリです。自分のサイトに記事を置き、Webmention（ページ間のリンク通知）で知らせると、読者がフィードで購読できます。
+indie-mezzanineは、公開した記事をコレクション別のAtomフィードにまとめるアプリです。自分のサイトに記事を置き、[Webmention](https://indieweb.org/Webmention)で知らせると、読者がフィードで購読できます。
+
+## 思想
+
+[@moja.blue](https://tangled.org/moja.blue)さんが考案した「中二階」のIndieweb実装です。解説は[中二階について - Nawashiro](https://nawashiro.dev/posts/20261005-mezzanine)をご覧ください。
 
 ## 起動
 
