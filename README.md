@@ -1,91 +1,64 @@
 # mezzanine
 
-mezzanineは「中二階」の公開リレーを実装する。
-構想の出典: https://nawashiro.dev/posts/20261005-mezzanine
+mezzanineは、公開ページをWebmentionで受け付け、コレクション別のAtomフィードへまとめる小さなリレー。
+source URLごとの最初の検証成功スナップショットを保存する。原本の更新・所属変更・削除には追従しない。
 
-投稿者は自分の公開ページをUUID URNで束ねる。
-リレーはWebmention通知を受け付ける。
-リレーは原本のリンクと一つのh-entryを確認する。
-リレーはHTMLを除去したmicroformats2をSQLiteへ保存する。
-購読者はcollection別のAtomを読む。
+構想: https://nawashiro.dev/posts/20261005-mezzanine
 
-初版は一つのページと一つのcollectionだけを扱う。
-投稿クライアント、GUI、非公開のあだ名、複数リレーの収集とマージは対象外とする。
-リレーはsource URLごとの最初の検証成功スナップショットを固定する。
-リレーは再通知でも原本の更新・所属移動・削除を反映しない。
-スナップショットは通知後の取得・検証時点の内容とする。
+## 起動
 
-## Goで起動
-
-開発者は Go 1.27.1 を用意する。
-開発者は次のコマンドでビルドして起動する。
-
-```sh
-mkdir -p bin
-CGO_ENABLED=0 go build -trimpath -o bin/mezzanine ./cmd/mezzanine
-PUBLIC_URL=https://relay.example/ DATA_DIR=./data LISTEN_ADDR=:8080 ./bin/mezzanine
-```
-
-`PUBLIC_URL` は実際の公開ルートURLに置き換える。
-開発者は別のターミナルで稼働を確認する。
-
-```sh
-./bin/mezzanine healthcheck
-curl --fail http://127.0.0.1:8080/healthz
-```
-
-## Dockerで起動
+Docker EngineとDocker Composeを使う。
 
 ```sh
 cp .env.example .env
-# 運用者は .env の PUBLIC_URL を変更する。
-# HOST_DATA_DIR を変更する場合、運用者は以下も同じ保存先へ置き換える。
+# .envのPUBLIC_URLを実際の公開ルートURLへ変更する。
 sudo install -d -o 65532 -g 65532 -m 0750 ./data
-docker compose config
 docker compose up -d --build
+docker compose exec relay /mezzanine healthcheck
 ```
 
-Dockerfileは非rootの単一コンテナを作る。
-Composeはホストの `./data` を `/data` へバインドマウントする。
-運用者は `HOST_DATA_DIR` でホスト側の保存先を変更する。
-Composeは存在しないホストディレクトリを自動作成しない。
-ComposeはHTTPを127.0.0.1:8080へ公開する。
-運用者は既存のプロキシで公開HTTPSを終端する。
-Docker実行検証の未完了事項は検証記録を参照する。
+ComposeはHTTPを `127.0.0.1:8080` に公開する。公開HTTPSは既存のリバースプロキシで終端する。
+`PUBLIC_URL` はサブパスを含まないルートURLにする。
+保存先はホストの `./data`。別の保存先を使う場合、`.env` の `HOST_DATA_DIR` と作成するディレクトリを揃える。
+SELinuxが有効なホストでは、保存先にコンテナ用ラベルも設定する。
 
-## 文書
+## 投稿と購読
 
-- [投稿・通知・購読](docs/PUBLISHING.md)
-- [設定・再作成・バックアップ・復元](docs/OPERATIONS.md)
-- [依存とライセンス](docs/DEPENDENCIES.md)
-- [実行した検証と未完了事項](docs/VERIFICATION.md)
-- [投稿ページ例](examples/post.html)
-
-## 検証
-
-テストは独立した固定fixtureを使う。
-テスト専用Fetcherはローカルsourceを読む。
-本番の取得設定は内部ネットワークを許可しない。
-文書のcurl検証にはcurlとPOSIX shellを使う。
+投稿者は [ページ例](examples/post.html) のUUIDとリレーへのリンクを変更し、HTMLを公開する。
+一つのページに一つの `h-entry` と一つのコレクションを置く。
 
 ```sh
-go mod verify
-go vet ./...
-go test -race ./...
-CGO_ENABLED=0 go build ./...
-openspec validate build-public-collection-relay --strict
+curl --fail-with-body -i \
+  --data-urlencode 'source=https://author.example/post' \
+  --data-urlencode 'target=https://relay.example/' \
+  https://relay.example/webmention
 ```
 
-## 仕様管理
+202は通知の受付を示す。リレーは原本を取得・検証した後に掲載する。
+保存済みsourceの再通知は200になる。リレーはその原本を再取得しない。
+購読者はコレクションのUUIDを使う。
 
-OpenSpecはspec-driven方式を使う。
-`openspec/changes/build-public-collection-relay/` は初版の仕様差分、設計、実装タスクを保持する。
-Docker実行の未検証タスクは未完了のまま残す。
-アーカイブは全ての完了条件を検証した後に扱う。
+```text
+https://relay.example/collections/550e8400-e29b-41d4-a716-446655440000.atom
+```
+
+## バックアップ
+
+運用者は `docker compose stop relay` で停止し、保存先のディレクトリ全体をコピーする。
+コピー後は `docker compose start relay` で再開する。
+復元時も停止し、ディレクトリ全体をバックアップで置き換える。運用者はUID/GID 65532の書き込み権限を保つ。
+
+## 開発
+
+Go 1.27.1を使う。仕様とタスクは `openspec/`、開発用スキルは `.hermes/skills/` に置く。
+
+```sh
+go test -race ./...
+CGO_ENABLED=0 go build -o bin/mezzanine ./cmd/mezzanine
+PUBLIC_URL=https://relay.example/ DATA_DIR=./data LISTEN_ADDR=:8080 ./bin/mezzanine
+```
 
 ## ライセンス
 
-mezzanine本体は [MIT License](LICENSE) で公開する。
-第三者の依存物は元のライセンス条件を保持する。
-配布時の区別は [ライセンス方針](docs/LICENSING.md) を参照する。
-コンテナのDebian資産は本体のMITとは別条件とする。
+本体は [MIT License](LICENSE)。依存物の権利表示は [第三者通知](docs/THIRD_PARTY_NOTICES.txt) に保持する。
+コンテナのOS資産には元のライセンス条件を適用する。イメージ全体をMITだけとは扱わない。
