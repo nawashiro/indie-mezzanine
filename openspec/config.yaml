@@ -1,0 +1,12 @@
+schema: spec-driven
+
+context: |
+  Language: Japanese
+  All artifacts must be written in Japanese.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Project: mezzanine (working name), based on the 「中二階」 concept.
+  Source: https://nawashiro.dev/posts/20261005-mezzanine
+  Goal: small shared spaces identified by random identifiers, with private local nicknames.
+  Webmention relays and shared Atom ids for multi-relay collection/merging are ideas to investigate, not accepted requirements.
+  No application code or technology stack has been selected yet.
+  Separate accepted requirements from hypotheses and open questions.
