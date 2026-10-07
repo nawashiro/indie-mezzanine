@@ -1,6 +1,6 @@
-# Indiemezzanine
+# indie-mezzanine
 
-Indiemezzanineは、公開した記事をコレクション別のAtomフィードにまとめるアプリです。自分のサイトに記事を置き、[Webmention](https://indieweb.org/Webmention)で知らせると、読者がフィードで購読できます。
+indie-mezzanineは、個人サイトのページを、特にテーマの決まっていないフィードに追加できる仕組みです。著者のオプトイン式、配信はAtomです。
 
 ## 思想
 
@@ -14,8 +14,8 @@ Indiemezzanineは、公開した記事をコレクション別のAtomフィー�
 
 1. Cloudflare側で公開ホスト名の転送先を `http://relay:8080` に設定してください。
 2. 公開Webmention受付とAtom購読を公開してください。
-   `Cloudflare > セキュリティ > セキュリティルール > カスタムルール` を開いてください。
-   ホスト名・GETとPOST を選択し、WAFやブラウザ整合性チェックなどをスキップしてください。
+   - `Cloudflare > セキュリティ > セキュリティルール > カスタムルール` を開いてください。
+   - ホスト名・GETとPOST を選択し、WAFやブラウザ整合性チェックなどをスキップしてください。
 
 ### 2. 環境変数
 
@@ -27,7 +27,7 @@ cp .env.example .env
 
 ### 3. 永続化ディレクトリ
 
-UID/GID 65532、権限0750の保存先ディレクトリを作ってください。
+UID/GID`65532`、権限`0750`の保存先ディレクトリを作ってください。
 
 ```sh
 sudo install -d -o 65532 -g 65532 -m 0750 ./data
@@ -47,16 +47,19 @@ docker compose exec relay /mezzanine healthcheck # リレーのHTTP、保存先�
 
 [ページ例](examples/post.html)をご覧ください。
 
-- ページはMicroformat2でマークアップしてください。Indiemezzanineは1ページに1件の[h-entry](https://microformats.org/wiki/h-entry)を読みます。
-- 中2階はUUIDで区別します。ページに中2階への`rel=collection`を置いてください。`<link rel="collection" href="bbe44bfe-3a9c-410e-ad37-f1bf7402bce4">`
-- `PUBLIC_URL` へのリンクを置いてください。`<a href="https://relay.example/"></a>`
+- ページは[Microformat2](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Microformats)でマークアップしてください。サーバーは1ページに1件の[h-entry](https://microformats.org/wiki/h-entry)を読みます。
+- UUIDへの`rel="collection"`リンクを置いてください。
+  - `<link rel="collection" href="urn:uuid:bbe44bfe-3a9c-410e-ad37-f1bf7402bce4">`
+  - これが中2階のIDです。サーバーはこれを見てフィードを組み立てます。
+- `PUBLIC_URL`へのリンクを置いてください。
+  - `<a href="https://relay.example/"></a>`
 
 リンク宛に出版ソフトやツールを使って[Webmention](https://indieweb.org/Webmention)を送信してください。
 
 - 受け付けると`HTTP 202`を返します。
 - 最初の検証に成功した内容のみ保存します。更新には対応していません。
 
-読者は、著者が`rel=collection`で指定したUUIDをRSSリーダーなどで購読できます。
+読者は、著者が`rel="collection"`で指定したUUIDをRSSリーダーなどで購読できます。
 
 ```text
 https://relay.example/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.atom
@@ -64,12 +67,8 @@ https://relay.example/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.atom
 
 ## バックアップ
 
-`docker compose stop relay` で停止し、保存先全体をコピーしてください。コピー後は `docker compose start relay` で再開します。
-
-コンテナの再作成には `docker compose up -d --force-recreate` を使ってください。
-同じ保存先を使う場合、投稿と受付済み通知は残ります。
-
-復元時も停止し、保存先全体をバックアップで置き換えてください。UID/GID 65532の書き込み権限を保ってから再開します。
+- `docker compose stop relay` で停止し、保存先全体をコピーしてください。コピー後は `docker compose start relay` で再開します。
+- コンテナの再作成には `docker compose up -d --force-recreate` を使ってください。同じ保存先を使う場合、投稿と受付済み通知は残ります。
 
 ## ライセンス
 
