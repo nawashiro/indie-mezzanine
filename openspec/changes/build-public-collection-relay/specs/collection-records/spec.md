@@ -2,7 +2,7 @@
 
 ## Purpose
 
-リレーはページの所属先と投稿を曖昧なく対応させる。保存データはmicroformats2の意味構造を保持し、HTML表現を持たない。将来の表示機能はAtom専用モデルではなく、この構造化データを利用する。
+リレーはページの所属先と投稿を曖昧なく対応させる。保存データはsource URLごとの最初の検証成功スナップショットとし、microformats2の意味構造を保持してHTML表現を持たない。将来の表示機能はAtom専用モデルではなく、この構造化データを利用する。
 
 ## ADDED Requirements
 
@@ -63,3 +63,16 @@
 - **WHEN** 異なる投稿がUUID部分の大小文字だけが異なる有効なURNを宣言する
 - **THEN** リレーは両方を同じcollectionへ分類する
 - **AND** 両投稿のfeedは同じ小文字UUID URNをidに使う
+
+### Requirement: sourceごとの不変な保存
+リレーはsource URL単独の一意制約で投稿を一件だけ保存する SHALL。リレーは最初の検証成功時のmf2、collection、target、最終取得URL、初回保存日時を固定する SHALL。リレーは競合する挿入と再通知で既存投稿を上書きしない SHALL。
+
+#### Scenario: 初回保存の競合
+- **WHEN** 同じsourceの初回保存が競合する
+- **THEN** 投稿は一件だけ保存される
+- **AND** 最初に保存成功したスナップショットの内容と所属を保持する
+
+#### Scenario: 同じsourceの所属変更
+- **WHEN** 保存後に原本のcollectionが変わり、同じsourceが再通知される
+- **THEN** 保存済みのcollectionとmf2は変わらない
+- **AND** 新しいcollectionへの移動または複製を行わない

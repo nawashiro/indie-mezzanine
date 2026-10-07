@@ -20,7 +20,7 @@
 - **AND** 各feedは各リレーのURLをselfリンクに使う
 
 ### Requirement: 安定した投稿識別子
-リレーはWebmentionで受け付けたsource URLをentry idとする SHALL。リレーは同じsourceの編集でentry idを変えない SHALL。リレーは投稿ごとにリレー固有のランダム識別子を生成しない SHALL。
+リレーはWebmentionで受け付けたsource URLをentry idとする SHALL。リレーは同じsourceの原本編集と再通知で保存済みentryを変えない SHALL。リレーは投稿ごとにリレー固有のランダム識別子を生成しない SHALL。
 
 #### Scenario: 複数リレーへの同じ投稿
 - **WHEN** 投稿者が同じsourceを二つのリレーへ通知する
@@ -52,10 +52,14 @@
 - **WHEN** 内容が変わらないfeedを複数回取得する
 - **THEN** entryの順序とupdatedは変わらない
 
-### Requirement: 未知のcollectionと空のcollection
-リレーは未知のcollectionと過去に投稿を持った空のcollectionを区別する SHALL。リレーは不正なUUID形式と未知のcollectionにHTTP 404を返す SHALL。リレーは既知の空collectionにentryなしのAtomを返す SHALL。
+### Requirement: 保存済みスナップショットからの配信
+リレーは原本を再取得せず、保存済みスナップショットからfeedを生成する SHALL。リレーは再通知でentryの本文、所属、メタデータ、updatedとfeed.updatedを変更しない SHALL。リレーは不正なUUID形式と未知のcollectionにHTTP 404を返す SHALL。
 
-#### Scenario: 全投稿の撤回
-- **WHEN** collectionの最後の投稿が撤回される
-- **THEN** collectionのfeedはHTTP 200を返す
-- **AND** feedは同じidを持ち、entryを含まない
+#### Scenario: 原本の編集と削除
+- **WHEN** 保存後に原本が編集または削除され、同じsourceが再通知される
+- **THEN** 元のcollectionは保存済みの同じentryを配信する
+- **AND** entryとfeedのupdatedは再通知で変わらない
+
+#### Scenario: 未知のcollection
+- **WHEN** 初回保存に成功した投稿がないcollectionのfeedを取得する
+- **THEN** リレーはHTTP 404を返す

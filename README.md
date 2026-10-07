@@ -1,35 +1,78 @@
 # mezzanine
 
-「中二階」の構想を検討・実装するためのリポジトリです。`mezzanine` は仮のプロジェクト名です。
-
+mezzanineは「中二階」の公開リレーを実装する。
 構想の出典: https://nawashiro.dev/posts/20261005-mezzanine
 
-## 目的
+投稿者は自分の公開ページをUUID URNで束ねる。
+リレーはWebmention通知を受け付ける。
+リレーは原本のリンクと一つのh-entryを確認する。
+リレーはHTMLを除去したmicroformats2をSQLiteへ保存する。
+購読者はcollection別のAtomを読む。
 
-ランダムな識別子を使った小さな共有空間で、参加者が共通の話題をゆるく共有できるようにします。
+初版は一つのページと一つのcollectionだけを扱う。
+投稿クライアント、GUI、非公開のあだ名、複数リレーの収集とマージは対象外とする。
+更新と削除は再通知まで反映しない。
 
-## 検討の出発点
+## Goで起動
 
-以下は記事から抽出した構想であり、確定した実装仕様ではありません。
+開発者は Go 1.27.1 を用意する。
+開発者は次のコマンドでビルドして起動する。
 
-- 共有空間をランダムな記号列で識別する。
-- 利用者ごとに非公開のあだ名を付け、画面ではそのあだ名を表示する。
-- 新しいプロトコルを作らず、Webmentionをリレーサーバーへ送る案を検討する。
-- 複数リレーへの送信と、共通のAtom `id` を利用した収集・マージの案を検討する。
+```sh
+mkdir -p bin
+CGO_ENABLED=0 go build -trimpath -o bin/mezzanine ./cmd/mezzanine
+PUBLIC_URL=https://relay.example/ DATA_DIR=./data LISTEN_ADDR=:8080 ./bin/mezzanine
+```
+
+`PUBLIC_URL` は実際の公開ルートURLに置き換える。
+開発者は別のターミナルで稼働を確認する。
+
+```sh
+./bin/mezzanine healthcheck
+curl --fail http://127.0.0.1:8080/healthz
+```
+
+## Dockerで起動
+
+```sh
+cp .env.example .env
+# 運用者は .env の PUBLIC_URL を変更する。
+docker compose config
+docker compose up -d --build
+```
+
+Dockerfileは非rootの単一コンテナを作る。
+Composeは保存用の名前付きボリュームを付ける。
+ComposeはHTTPを127.0.0.1:8080へ公開する。
+運用者は既存のプロキシで公開HTTPSを終端する。
+Docker実行検証の未完了事項は検証記録を参照する。
+
+## 文書
+
+- [投稿・通知・購読](docs/PUBLISHING.md)
+- [設定・再作成・バックアップ・復元](docs/OPERATIONS.md)
+- [依存とライセンス](docs/DEPENDENCIES.md)
+- [実行した検証と未完了事項](docs/VERIFICATION.md)
+- [投稿ページ例](examples/post.html)
+
+## 検証
+
+テストは独立した固定fixtureを使う。
+テスト専用Fetcherはローカルsourceを読む。
+本番の取得設定は内部ネットワークを許可しない。
+文書のcurl検証にはcurlとPOSIX shellを使う。
+
+```sh
+go mod verify
+go vet ./...
+go test -race ./...
+CGO_ENABLED=0 go build ./...
+openspec validate build-public-collection-relay --strict
+```
 
 ## 仕様管理
 
-OpenSpecの `spec-driven` ワークフローを使います。文書の本文は日本語です。
-
-```sh
-openspec list --json
-openspec new change <change-name>
-openspec status --change <change-name>
-```
-
-- `openspec/config.yaml`: プロジェクトの背景と文書の方針
-- `openspec/specs/`: 合意された仕様
-- `openspec/changes/`: 提案、仕様差分、設計、実装タスク
-- `.hermes/skills/`: OpenSpec CLIが生成したHermes用スキル
-
-初期化のみ完了しています。アプリケーションの実装、技術スタックの選定、最初の変更提案はまだ行っていません。
+OpenSpecはspec-driven方式を使う。
+`openspec/changes/build-public-collection-relay/` は初版の仕様差分、設計、実装タスクを保持する。
+Docker実行の未検証タスクは未完了のまま残す。
+アーカイブは全ての完了条件を検証した後に扱う。
