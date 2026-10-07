@@ -8,7 +8,7 @@
 
 再実行用の一時資料は `/opt/data/cache/mezzanine-spike-BNrG9V/README.md` にある。このパスは永続の依存先にしない。実装者は独立したfixtureと必要な検証をリポジトリへ作成する。
 
-合意済みの境界は公開リレー、単一コンテナ、ページ内のh-entry一つ、collection一つ、UUID URN限定、内部mf2、HTML表現の除去とする。以下のHTTP経路、代替メタデータ、資源上限はレビュー対象の具体案とする。
+合意済みの境界は公開リレー、単一のリレーコンテナ、ページ内のh-entry一つ、collection一つ、UUID URN限定、内部mf2、HTML表現の除去とする。公開経路はCompose内の別のcloudflaredコンテナとする。以下のHTTP経路、代替メタデータ、資源上限はレビュー対象の具体案とする。
 
 ## Goals / Non-Goals
 
@@ -54,13 +54,15 @@ HTTPサーバーはGo標準の `net/http` を使う。初版は次の経路を�
 
 運用者は `PUBLIC_URL` をリレーの公開ルートURLとして指定する。初版のtargetはこのURL一つとする。アプリはHostヘッダーから公開URLを推測しない。ルートはHTTP LinkヘッダーとHTMLのrel=webmentionでendpointを広告する。
 
-`PUBLIC_URL` はHTTPまたはHTTPS、認証情報なし、クエリなし、フラグメントなし、ルートパスだけを許可する。サブパス配備は初版の対象外とする。コンテナはHTTPで待ち受け、公開HTTPSの終端は既存の配備環境に任せる。
+`PUBLIC_URL` はHTTPまたはHTTPS、認証情報なし、クエリなし、フラグメントなし、ルートパスだけを許可する。サブパス配備は初版の対象外とする。リレーコンテナはHTTPで待ち受け、Cloudflareは公開HTTPSを終端する。cloudflaredはComposeネットワーク経由でリレーへ転送する。
 
 ### 3. 取得を一か所に限定する
 
 取得層は `doyensec/safeurl` を使う。初期候補バージョンは部品検証と同じv0.2.5とする。実装者は依存の安全性と互換性を再確認する。
 
 取得層はHTTPとHTTPS、80と443、URL内認証情報なしを要求する。取得層はライブラリの接続時IP検査を維持する。取得層は環境プロキシを無効化する。
+
+取得層はTransportの `ForceAttemptHTTP2` を有効にする。safeurlによる `DialContext` の差し替え後も、ALPNの交渉とHTTP/2の受信処理を一致させる。固定TLSサーバーの回帰試験はHTTP/1.1とHTTP/2の両方を検証する。本番の接続時IP検査は維持する。
 
 部品検証は認証情報付きLocationがデフォルトのredirect経路を通る問題を再現した。専用CheckRedirectは各転送先のスキーム、ポート、認証情報、回数を検査する。接続先IPの拒否は取得ライブラリに任せる。
 
@@ -142,6 +144,30 @@ Composeはホストの `./data` をコンテナの `/data` へバインドマウ
 
 運用者は起動前にホストディレクトリを作り、コンテナの非rootユーザーへ必要な書き込み権限だけを与える。アプリは権限不足で起動に失敗し、一時保存へ切り替えない。運用者は停止後にホストディレクトリをバックアップし、同じディレクトリへ復元する。再作成・復元後も保存済みsourceは再取得せず、未掲載のjobだけを処理する。
 
+### 11. Cloudflare Tunnelで公開経路をComposeへ閉じる
+
+Composeは `relay` と `cloudflared` を別サービスとして起動する。リレーは引き続き単一GoプロセスとSQLiteで動く。配備全体は二つの常駐コンテナとする。cloudflaredはリレーのイメージへ組み込まない。
+
+公開経路は次の構成とする。
+
+```text
+Internet --> Cloudflare --> cloudflared --> relay:8080 --> ./data
+```
+
+ComposeはホストへHTTPポートを公開しない。両サービスはComposeネットワークで接続する。ComposeはホストネットワークとDockerソケットを使わない。両サービスは外部接続を必要とするため、ネットワークを外向き通信禁止にはしない。
+
+Composeは環境変数 `CLOUDFLARED` を必須とする。Composeはその値をcloudflaredコンテナの `TUNNEL_TOKEN` へ渡す。cloudflaredは `tunnel --no-autoupdate run` でリモート管理Tunnelへ接続する。Composeはトークンをコマンド引数へ埋め込まない。Composeはトークンをrelayへ渡さない。
+
+トークンを文書、ログ、バージョン管理へ記録しない。環境変数経由のトークンはDocker管理権限からの秘匿を保証しない。実装者は設定検証の出力にトークンを残さない。cloudflaredのイメージはバージョンとdigestで固定する。
+
+運用者はCloudflare側で公開ホスト名を設定する。運用者はその転送先を `http://relay:8080` に設定する。コンテナ内の `localhost` は転送先に使わない。運用者は同じ公開ホスト名のHTTPSルートURLを `PUBLIC_URL` に指定する。トークンは公開ホスト名や `PUBLIC_URL` の設定を代替しない。
+
+公開Webmention受付とAtom購読には対話認証を要求しない。運用者はCloudflare側のアクセス制御で、この公開要件を維持する。
+
+ホストはDocker Engine、Compose、データ保存先を提供する。ホストへのcloudflared導入、systemd設定、リバースプロキシ、TLS証明書管理は不要とする。ホストの `./data` の権限設定と停止後のバックアップ・復元は維持する。
+
+リレーのヘルス確認は既存の `/healthz` を使う。リレーの正常状態はTunnel接続や公開経路の正常状態を保証しない。実装者はTunnel経由の公開到達性を別に検証する。Tunnel停止中もリレーは保存済みデータを保持する。
+
 ## Risks / Trade-offs
 
 - 公開受付のスパムとDoS → 有限の受付・キュー・取得上限を置く。認証や承認UIは追加しない。
@@ -153,6 +179,8 @@ Composeはホストの `./data` をコンテナの `/data` へバインドマウ
 - 原本の誤記、所属変更、削除は保存後に反映されない → 初回スナップショットの固定とWebmentionの更新・削除非対応を明記する。再通知から変更できる管理経路を追加しない。
 - ホストディレクトリの権限不備 → 運用説明に非rootユーザーの権限設定を記し、書き込み不能と復元を実行確認する。
 - SQLiteとコンテナの未検証 → 実装タスクは再起動・保存・非root運用の実行確認を含む。
+- Tunnelの停止とCloudflare側の設定不備 → 公開到達性をリレーのヘルス確認と分けて検証する。
+- Tunnelトークンの漏えい → トークンをcloudflaredだけへ渡す。設定検証の出力を保存しない。
 
 ## Migration Plan
 
@@ -162,4 +190,4 @@ Composeはホストの `./data` をコンテナの `/data` へバインドマウ
 
 ## Open Questions
 
-仕様と実装タスクを変える未解決事項は残さない。本書の具体案は実装開始前のレビュー対象とする。TLS終端の製品と公開ドメインの実値は配備時に選ぶ。
+仕様と実装タスクを変える未解決事項は残さない。本書の具体案は実装開始前のレビュー対象とする。公開HTTPSの終端はCloudflareとする。運用者は配備時に公開ドメインとリモート管理Tunnelを選ぶ。

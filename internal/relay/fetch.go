@@ -47,7 +47,8 @@ func NewSafeFetcher(c Config) (*SafeFetcher, error) {
 	if c.FetchTimeout <= 0 || c.MaxBody <= 0 || c.Redirects <= 0 {
 		return nil, fmt.Errorf("取得上限が不正")
 	}
-	tr := &http.Transport{Proxy: nil, ResponseHeaderTimeout: c.FetchTimeout, TLSHandshakeTimeout: c.FetchTimeout, IdleConnTimeout: 30 * time.Second, MaxIdleConns: 4, MaxIdleConnsPerHost: 2, MaxResponseHeaderBytes: 32 << 10}
+	// safeurlはDialContextを差し替える。ALPNのh2と受信処理を一致させる。
+	tr := &http.Transport{Proxy: nil, ForceAttemptHTTP2: true, ResponseHeaderTimeout: c.FetchTimeout, TLSHandshakeTimeout: c.FetchTimeout, IdleConnTimeout: 30 * time.Second, MaxIdleConns: 4, MaxIdleConnsPerHost: 2, MaxResponseHeaderBytes: 32 << 10}
 	cfg := safeurl.GetConfigBuilder().SetAllowedSchemes("http", "https").SetAllowedPorts(80, 443).EnableIPv6(true).SetTimeout(c.FetchTimeout).SetCheckRedirect(redirectCheck(c.Redirects)).SetTransport(tr).Build()
 	return &SafeFetcher{safeurl.Client(cfg), c.MaxBody}, nil
 }

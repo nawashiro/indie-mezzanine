@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"github.com/doyensec/safeurl"
@@ -14,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -55,6 +58,55 @@ func TestSafeFetcherRejects(t *testing.T) {
 		t.Fatalf("接続時IP拒否ではない %v", e)
 	}
 }
+func TestSafeFetcherTLSProtocols(t *testing.T) {
+	for _, http2 := range []bool{false, true} {
+		t.Run(fmt.Sprintf("HTTP2=%t", http2), func(t *testing.T) {
+			source := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				want := 1
+				if http2 {
+					want = 2
+				}
+				if r.ProtoMajor != want {
+					t.Errorf("HTTP protocol = %d, want %d", r.ProtoMajor, want)
+				}
+				w.Header().Set("Content-Type", "text/html")
+				fmt.Fprint(w, "<p>fixture</p>")
+			}))
+			source.EnableHTTP2 = http2
+			source.StartTLS()
+			defer source.Close()
+			f, e := NewSafeFetcher(config(t))
+			if e != nil {
+				t.Fatal(e)
+			}
+			tr := f.client.Client.Transport.(*http.Transport)
+			roots := x509.NewCertPool()
+			roots.AddCert(source.Certificate())
+			if tr.TLSClientConfig == nil {
+				tr.TLSClientConfig = &tls.Config{}
+			} else {
+				tr.TLSClientConfig = tr.TLSClientConfig.Clone()
+			}
+			tr.TLSClientConfig.RootCAs = roots
+			_, port, _ := net.SplitHostPort(source.Listener.Addr().String())
+			p, _ := strconv.Atoi(port)
+			// 固定TLS fixtureだけを許可する。本番のIP・port制約は変更しない。
+			cfg := safeurl.GetConfigBuilder().SetTransport(tr).SetAllowedIPs("127.0.0.1").SetAllowedPorts(p).SetTimeout(2 * time.Second).Build()
+			client := safeurl.Client(cfg)
+			defer client.CloseIdleConnections()
+			res, e := client.Client.Get(source.URL)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer res.Body.Close()
+			body, e := io.ReadAll(res.Body)
+			if e != nil || string(body) != "<p>fixture</p>" {
+				t.Fatalf("TLS本文: %q, %v", body, e)
+			}
+		})
+	}
+}
+
 func TestRedirectChecks(t *testing.T) {
 	for _, location := range []string{"http://user:pass@example.org/", "ftp://example.org/", "http://example.org:8080/", "http://127.0.0.1/", "http://[::1]/"} {
 		t.Run(location, func(t *testing.T) {

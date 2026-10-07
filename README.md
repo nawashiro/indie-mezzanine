@@ -8,21 +8,47 @@ indie-mezzanineは、公開した記事をコレクション別のAtomフィー�
 
 ## 起動
 
-Docker EngineとDocker Compose、公開URL、HTTPSを終端するリバースプロキシを用意してください。
+運用者はDocker Engine、Docker Compose、Cloudflareの公開ホスト名、リモート管理Tunnelを用意してください。
+Composeはリレーとcloudflaredを起動します。Cloudflareは公開HTTPSを終端します。
+ホストへのcloudflared導入、リバースプロキシ、TLS証明書管理は不要です。
+
+Cloudflare側で公開ホスト名の転送先を `http://relay:8080` に設定してください。
+`localhost` はcloudflared自身を指すため、転送先に指定しないでください。
+公開Webmention受付とAtom購読には、Cloudflare Accessのログインや対話型チャレンジを要求しないでください。
+ブラウザー整合性チェックがWebmention送信者やフィードリーダーを拒否する場合、公開ホスト名への適用を除外してください。
 
 ```sh
 cp .env.example .env
 ```
 
-`.env` の `PUBLIC_URL` を実際の公開ルートURL（例: `https://relay.example/`）に変更してください。サブパス・認証情報・クエリ・フラグメントは含めません。
+`.env` の `PUBLIC_URL` を同じ公開ホスト名のHTTPSルートURL（例: `https://relay.example/`）に変更してください。
+サブパス・認証情報・クエリ・フラグメントは含めません。
+
+運用者はTunnelトークンを環境変数 `CLOUDFLARED` に指定してください。
+Composeはシェルの環境変数を優先します。運用者は未追跡の `.env` でも指定できます。
+未設定または空の値は、Composeの起動エラーになります。
+Composeは値をcloudflaredの `TUNNEL_TOKEN` へ渡します。リレーはトークンを受け取りません。
+
+トークンをコマンド引数、ログ、バージョン管理へ記録しないでください。
+`docker compose config` の出力はトークンを含むため、表示・保存しないでください。
+設定検証には `docker compose config --quiet` を使ってください。
+Docker管理権限を持つ利用者はコンテナの環境変数を参照できます。
 
 ```sh
 sudo install -d -o 65532 -g 65532 -m 0750 ./data
+docker compose config --quiet
 docker compose up -d --build
 docker compose exec relay /mezzanine healthcheck
 ```
 
-HTTPの接続先は既定で `127.0.0.1:8080` です。リバースプロキシからここへ転送してください。
+ComposeはホストへHTTPポートを公開しません。
+cloudflaredはComposeネットワーク経由で `relay:8080` へ接続します。
+運用者は公開URLでルートページとWebmention endpointの広告を確認してください。
+
+`docker compose exec relay /mezzanine healthcheck` はリレーのHTTP、保存先、workerを確認します。
+この確認はTunnelの接続状態や公開到達性を保証しません。
+公開URLへ接続できない場合、Cloudflare側の転送先とTunnel接続状態を確認してください。
+cloudflaredのイメージ更新は、Composeの固定バージョンとdigestの更新で管理します。
 
 保存先はホストの `./data` です。変更する場合は、`.env` の `HOST_DATA_DIR` と作成するディレクトリを揃えてください。SELinuxが有効なホストでは、保存先にコンテナ用ラベルも設定してください。
 
@@ -49,6 +75,9 @@ https://relay.example/collections/550e8400-e29b-41d4-a716-446655440000.atom
 ## バックアップ
 
 `docker compose stop relay` で停止し、保存先全体をコピーしてください。コピー後は `docker compose start relay` で再開します。
+
+コンテナの再作成には `docker compose up -d --force-recreate` を使ってください。
+同じ保存先を使う場合、投稿と受付済み通知は残ります。
 
 復元時も停止し、保存先全体をバックアップで置き換えてください。UID/GID 65532の書き込み権限を保ってから再開します。
 

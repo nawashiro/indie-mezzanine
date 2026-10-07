@@ -10,8 +10,6 @@ services:
       PUBLIC_URL: "${PUBLIC_URL:?PUBLIC_URL を公開ルートURLに設定してください}"
       DATA_DIR: /data
       LISTEN_ADDR: ":8080"
-    ports:
-      - "127.0.0.1:${PORT:-8080}:8080"
     volumes:
       - type: bind
         source: ${HOST_DATA_DIR:-./data}
@@ -36,3 +34,24 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 3
+  cloudflared:
+    image: cloudflare/cloudflared:2026.2.0@sha256:404528c1cd63c3eb882c257ae524919e4376115e6fe57befca8d603656a91a4c
+    user: "65532:65532"
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: "${CLOUDFLARED:?CLOUDFLARED にTunnelトークンを設定してください}"
+    depends_on:
+      relay:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 1
+    stop_grace_period: 35s
+    restart: unless-stopped
