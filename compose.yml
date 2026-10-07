@@ -13,7 +13,11 @@ services:
     ports:
       - "127.0.0.1:${PORT:-8080}:8080"
     volumes:
-      - data:/data
+      - type: bind
+        source: ${HOST_DATA_DIR:-./data}
+        target: /data
+        bind:
+          create_host_path: false
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -32,5 +36,3 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 3
-volumes:
-  data:

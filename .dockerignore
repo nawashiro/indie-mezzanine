@@ -7,3 +7,5 @@
 !internal/**
 !docs/
 !docs/THIRD_PARTY_NOTICES.txt
+!LICENSE
+!docs/LICENSING.md

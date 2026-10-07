@@ -35,19 +35,26 @@ func NewApp(c Config, s *Store, f Fetcher) (*App, error) {
 	return &App{Config: c, Store: s, Fetcher: f}, nil
 }
 func (a *App) Process(ctx context.Context, j Job) error {
+	known, e := a.Store.HasSource(ctx, j.Source)
+	if e != nil {
+		return e
+	}
+	if known {
+		return nil
+	}
 	p, e := a.Fetcher.Fetch(ctx, j.Source)
 	if e != nil {
 		return e
 	}
 	if p.Status == 404 || p.Status == 410 {
-		return a.Store.Apply(ctx, j, p.URL, nil, time.Now())
+		return ErrIneligible
 	}
 	if p.Status != 200 {
 		return fmt.Errorf("原本HTTP %d", p.Status)
 	}
 	r, e := Parse(p, j.Target)
 	if errors.Is(e, ErrIneligible) {
-		return a.Store.Apply(ctx, j, p.URL, nil, time.Now())
+		return ErrIneligible
 	}
 	if e != nil {
 		return e
@@ -118,7 +125,7 @@ func (a *App) Handler() http.Handler {
 		endpoint := strings.TrimRight(a.Config.PublicURL, "/") + "/webmention"
 		w.Header().Set("Link", "<"+endpoint+">; rel=\"webmention\"")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>mezzanine</title><link rel="webmention" href="%s"></head><body><h1>mezzanine</h1><p>公開ページの単一h-entryとUUID collectionをAtomに束ねるリレーです。Webmentionの受付は掲載の保証ではありません。</p></body></html>`, html.EscapeString(endpoint))
+		fmt.Fprintf(w, `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>mezzanine</title><link rel="webmention" href="%s"></head><body><h1>mezzanine</h1><p>公開ページの単一h-entryとUUID collectionをAtomに束ねるリレーです。Webmentionの受付は掲載の保証ではありません。最初に検証成功したスナップショットを固定し、原本の更新・所属移動・削除には追従しません。</p></body></html>`, html.EscapeString(endpoint))
 	})
 	m.HandleFunc("POST /webmention", func(w http.ResponseWriter, r *http.Request) {
 		media, _, e := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -148,6 +155,11 @@ func (a *App) Handler() http.Handler {
 			return
 		}
 		e = a.Store.Enqueue(r.Context(), source, target, a.Config.Queue, time.Now())
+		if errors.Is(e, ErrStored) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			fmt.Fprintln(w, "保存済みスナップショットを保持しました。再取得と変更は行いません。")
+			return
+		}
 		if errors.Is(e, ErrFull) {
 			http.Error(w, "通知キュー満杯", 503)
 			return

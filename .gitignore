@@ -1,5 +1,7 @@
 /bin/
 /data/
+/data.before-restore/
+/backup/
 /.env
 *.db
 *.db-wal

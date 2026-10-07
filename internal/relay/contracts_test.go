@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -16,7 +17,7 @@ import (
 	"time"
 )
 
-func TestMF2StructureAndEquivalentHash(t *testing.T) {
+func TestMF2StructureAndStableJSON(t *testing.T) {
 	body := strings.Replace(fixture(id1, "<b>内容</b>"), "</article>", `<div class="h-cite"><span class="p-name">子項目</span><div class="e-content"><b>子内容</b></div></div></article>`, 1)
 	r, e := Parse(page(body), target)
 	if e != nil {
@@ -39,8 +40,8 @@ func TestMF2StructureAndEquivalentHash(t *testing.T) {
 	other := strings.ReplaceAll(body, "<b>", "<i>")
 	other = strings.ReplaceAll(other, "</b>", "</i>")
 	r2, e := Parse(page(other), target)
-	if e != nil || r.Hash != r2.Hash {
-		t.Fatal("HTMLだけの変化で同値ハッシュ変動", e)
+	if e != nil || !bytes.Equal(r.MF2, r2.MF2) {
+		t.Fatal("HTMLだけの変化で保存JSON変動", e)
 	}
 	// 最終取得URLの相対参照を使い、余計な外部URLを取得しない。
 	ppage := page(strings.Replace(fixture(id1, "x"), `href="`+target+`"`, `href="../"`, 1))
@@ -135,6 +136,12 @@ func TestExampleAndDocumentCommands(t *testing.T) {
 		}
 		res.Body.Close()
 		if res.StatusCode == 200 {
+			repeated := exec.Command("sh", "-c", string(command[1]))
+			repeated.Env = cmd.Env
+			out, e := repeated.CombinedOutput()
+			if e != nil || !strings.Contains(string(out), "200 OK") {
+				t.Fatalf("再通知curl %v %s", e, out)
+			}
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -150,14 +157,14 @@ func TestBackupRestoreAndInterruptedJobs(t *testing.T) {
 	}
 	j := Job{Source: "https://source.example/post", Target: target}
 	r := mustRecord(t, id1, "stored")
-	if e = s.Apply(ctx, j, j.Source, &r, time.Now()); e != nil {
-		t.Fatal(e)
-	}
 	if e = s.Enqueue(ctx, j.Source, target, 100, time.Now()); e != nil {
 		t.Fatal(e)
 	}
 	claimed, e := s.Claim(ctx, time.Now())
 	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Apply(ctx, j, j.Source, &r, time.Now()); e != nil {
 		t.Fatal(e)
 	}
 	if e = s.Close(); e != nil {
@@ -182,6 +189,14 @@ func TestBackupRestoreAndInterruptedJobs(t *testing.T) {
 	again, e := s.Claim(ctx, time.Now())
 	if e != nil || again.ID != claimed.ID {
 		t.Fatal("中断job復旧", again, e)
+	}
+	f := &countFetcher{}
+	a, _ := NewApp(config(t), s, f)
+	if e = a.Process(ctx, again); e != nil || f.calls != 0 {
+		t.Fatal("復元済みsourceを取得", f.calls, e)
+	}
+	if e = s.Finish(ctx, again, nil, 3, time.Now()); e != nil {
+		t.Fatal(e)
 	}
 	_, posts, e := s.Feed(ctx, id1, 100)
 	if e != nil || len(posts) != 1 || posts[0].MF2 != string(r.MF2) || posts[0].Source != j.Source {

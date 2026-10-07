@@ -2,8 +2,6 @@ package relay
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"github.com/google/uuid"
@@ -31,7 +29,6 @@ func Collection(raw string) (string, error) {
 type Record struct {
 	Collection string
 	MF2        json.RawMessage
-	Hash       string
 }
 
 func walk(n *html.Node, f func(*html.Node)) {
@@ -154,8 +151,7 @@ func Parse(p Page, target string) (Record, error) {
 	for k := range cols {
 		id = k
 	}
-	h := sha256.Sum256(append([]byte(id+"\n"), raw...))
-	return Record{id, raw, hex.EncodeToString(h[:])}, nil
+	return Record{id, raw}, nil
 }
 func stripHTML(v any) {
 	switch x := v.(type) {

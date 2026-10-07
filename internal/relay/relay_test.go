@@ -103,8 +103,8 @@ func TestParseConstraints(t *testing.T) {
 					t.Fatal("HTML残存")
 				}
 				r2, e := Parse(page(tt.body), target)
-				if e != nil || r.Hash != r2.Hash {
-					t.Fatal("不安定ハッシュ")
+				if e != nil || !bytes.Equal(r.MF2, r2.MF2) {
+					t.Fatal("不安定JSON")
 				}
 			}
 		})
@@ -158,67 +158,61 @@ func TestStorePersistenceAndTransactions(t *testing.T) {
 	if e = s.Apply(ctx, j, j.Source, &r, now); e != nil {
 		t.Fatal(e)
 	}
-	if e = s.Apply(ctx, j, j.Source, &r, now.Add(time.Hour)); e != nil {
+	if e = s.Close(); e != nil {
 		t.Fatal(e)
 	}
-	up, ps, e := s.Feed(ctx, id1, 100)
-	if e != nil || len(ps) != 1 || !up.Equal(now) || !ps[0].Updated.Equal(now) {
-		t.Fatalf("同値更新 %v %v %v", up, ps, e)
-	}
-	if string(r.MF2) != ps[0].MF2 {
-		t.Fatal("mf2読み戻し不一致")
-	}
-	s.Close()
 	s, e = OpenStore(dir)
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer s.Close()
-	_, ps, e = s.Feed(ctx, id1, 100)
-	if e != nil || len(ps) != 1 {
+	changed := mustRecord(t, id2, "edited and moved")
+	other := j
+	other.Target = "https://other.example/"
+	var wg sync.WaitGroup
+	for i := 0; i < 12; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if e := s.Apply(ctx, other, "https://changed.example/", &changed, now.Add(time.Hour)); e != nil {
+				t.Error(e)
+			}
+		}()
+	}
+	wg.Wait()
+	up, ps, e := s.Feed(ctx, id1, 100)
+	if e != nil || len(ps) != 1 || !up.Equal(now) || !ps[0].Updated.Equal(now) || !ps[0].Created.Equal(now) || ps[0].MF2 != string(r.MF2) || ps[0].Target != target || ps[0].FinalURL != j.Source {
+		t.Fatalf("スナップショット変動: %v %v %v", up, ps, e)
+	}
+	if _, _, e = s.Feed(ctx, id2, 100); e != ErrUnknown {
+		t.Fatal("再通知で新collection作成", e)
+	}
+	if _, e = s.db.Exec("INSERT INTO posts SELECT source, 'https://other.example/', final_url, collection, mf2, created, entry_sec, entry_nano FROM posts"); e == nil {
+		t.Fatal("一意制約なし")
+	}
+	if _, e = s.db.Exec(`CREATE TRIGGER fail_insert BEFORE INSERT ON posts BEGIN SELECT RAISE(ABORT,'test'); END`); e != nil {
 		t.Fatal(e)
 	}
-	r2 := mustRecord(t, id2, "moved")
-	if e = s.Apply(ctx, j, j.Source, &r2, now.Add(2*time.Hour)); e != nil {
-		t.Fatal(e)
-	}
-	_, ps, e = s.Feed(ctx, id1, 100)
-	if e != nil || len(ps) != 0 {
-		t.Fatal("旧所属")
-	}
-	_, ps, e = s.Feed(ctx, id2, 100)
-	if e != nil || len(ps) != 1 || !ps[0].Created.Equal(now) {
-		t.Fatal("移動")
-	}
-	// DB側エラーでcollection日時と投稿の両方がrollbackされる。
-	_, e = s.db.Exec(`CREATE TRIGGER fail_update BEFORE UPDATE ON posts BEGIN SELECT RAISE(ABORT,'test'); END`)
-	if e != nil {
-		t.Fatal(e)
-	}
-	r3 := mustRecord(t, id1, "rollback")
-	if e = s.Apply(ctx, j, j.Source, &r3, now.Add(3*time.Hour)); e == nil {
+	other.Source = "https://source.example/new"
+	if e = s.Apply(ctx, other, other.Source, &changed, now.Add(2*time.Hour)); e == nil {
 		t.Fatal("rollback未発生")
 	}
+	if _, _, e = s.Feed(ctx, id2, 100); e != ErrUnknown {
+		t.Fatal("collection部分反映", e)
+	}
 	up, ps, e = s.Feed(ctx, id1, 100)
-	if e != nil || len(ps) != 0 || !up.Equal(now.Add(2*time.Hour)) {
-		t.Fatal("部分反映")
-	}
-	s.db.Exec("DROP TRIGGER fail_update")
-	if e = s.Apply(ctx, j, j.Source, nil, now.Add(4*time.Hour)); e != nil {
-		t.Fatal(e)
-	}
-	_, ps, e = s.Feed(ctx, id2, 100)
-	if e != nil || len(ps) != 0 {
-		t.Fatal("空collection消失")
+	if e != nil || len(ps) != 1 || !up.Equal(now) {
+		t.Fatal("既存データ変動", e)
 	}
 }
+
 func TestStoreSchemaAndUnavailable(t *testing.T) {
 	dir := t.TempDir()
 	s, e := OpenStore(dir)
 	if e != nil {
 		t.Fatal(e)
 	}
-	s.db.Exec("PRAGMA user_version=99")
+	s.db.Exec("PRAGMA user_version=1")
 	s.Close()
 	if s, e = OpenStore(dir); e == nil {
 		s.Close()
@@ -338,31 +332,52 @@ func TestProcessOutcomes(t *testing.T) {
 		name     string
 		p        Page
 		err      error
-		withdraw bool
+		terminal bool
 	}{
-		{"404", Page{Status: 404}, nil, true}, {"410", Page{Status: 410}, nil, true}, {"link missing", page(strings.Replace(fixture(id1, "x"), target, "https://else.example/", 1)), nil, true}, {"qualification missing", page("<a href='" + target + "'>relay</a>"), nil, true}, {"5xx", Page{Status: 503}, nil, false}, {"timeout", Page{}, context.DeadlineExceeded, false}, {"safe refusal", Page{}, errors.New("unsafe source"), false}, {"size overflow", Page{}, errors.New("body limit"), false},
+		{"404", Page{Status: 404}, nil, true}, {"410", Page{Status: 410}, nil, true},
+		{"link missing", page(strings.Replace(fixture(id1, "x"), target, "https://else.example/", 1)), nil, true},
+		{"qualification missing", page("<a href='" + target + "'>relay</a>"), nil, true},
+		{"5xx", Page{Status: 503}, nil, false}, {"timeout", Page{}, context.DeadlineExceeded, false},
+		{"safe refusal", Page{}, errors.New("unsafe source"), false}, {"size overflow", Page{}, errors.New("body limit"), false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := store(t)
 			j := Job{Source: "https://source.example/post", Target: target}
-			r := mustRecord(t, id1, "original")
-			s.Apply(ctx, j, j.Source, &r, time.Now())
-			a, _ := NewApp(config(t), s, resultFetcher{tt.p, tt.err})
+			f := &countFetcher{p: tt.p, err: tt.err}
+			a, _ := NewApp(config(t), s, f)
 			e := a.Process(ctx, j)
-			_, posts, er := s.Feed(ctx, id1, 100)
-			if er != nil {
-				t.Fatal(er)
+			if e == nil || errors.Is(e, ErrIneligible) != tt.terminal {
+				t.Fatal("初回失敗判定", e)
 			}
-			if tt.withdraw {
-				if e != nil || len(posts) != 0 {
-					t.Fatal(e, posts)
-				}
-			} else if e == nil || len(posts) != 1 {
-				t.Fatal(e, posts)
+			known, e := s.HasSource(ctx, j.Source)
+			if e != nil || known {
+				t.Fatal("失敗を保存", e)
+			}
+			r := mustRecord(t, id1, "original")
+			now := time.Now()
+			if e = s.Apply(ctx, j, j.Source, &r, now); e != nil {
+				t.Fatal(e)
+			}
+			f.calls = 0
+			if e = a.Process(ctx, j); e != nil || f.calls != 0 {
+				t.Fatal("保存済みを再取得", f.calls, e)
+			}
+			up, ps, e := s.Feed(ctx, id1, 100)
+			if e != nil || len(ps) != 1 || ps[0].MF2 != string(r.MF2) || !up.Equal(now) {
+				t.Fatal("保存後の不変性", ps, e)
 			}
 		})
 	}
 }
+
+type countFetcher struct {
+	p     Page
+	err   error
+	calls int
+}
+
+func (f *countFetcher) Fetch(context.Context, string) (Page, error) { f.calls++; return f.p, f.err }
+
 func TestHTTPAdmission(t *testing.T) {
 	s := store(t)
 	c := config(t)
@@ -391,6 +406,17 @@ func TestHTTPAdmission(t *testing.T) {
 	}
 	if n := send("POST", form); n != 503 {
 		t.Fatal(n)
+	}
+	r := mustRecord(t, id1, "stored")
+	if e := s.Apply(context.Background(), Job{Source: "https://source.example/p", Target: target}, "https://source.example/p", &r, time.Now()); e != nil {
+		t.Fatal(e)
+	}
+	if n := send("POST", form); n != 200 {
+		t.Fatal("満杯時の保存済みsource", n)
+	}
+	var jobs int
+	if e := s.db.QueryRow("SELECT count(*) FROM jobs").Scan(&jobs); e != nil || jobs != 1 {
+		t.Fatal("job追加", jobs, e)
 	}
 	s.Close()
 	if n := send("POST", form); n == 202 {
@@ -451,10 +477,12 @@ func TestE2EAndRestart(t *testing.T) {
 	defer cancel()
 	var mu sync.Mutex
 	body := fixture(id1, "initial")
-	status := 200
+	status := 404
+	calls := 0
 	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
+		calls++
 		w.WriteHeader(status)
 		fmt.Fprint(w, body)
 	}))
@@ -469,117 +497,203 @@ func TestE2EAndRestart(t *testing.T) {
 	if e = a.Start(ctx); e != nil {
 		t.Fatal(e)
 	}
+	defer func() { cancel(); a.Wait() }()
 	server := httptest.NewServer(a.Handler())
 	defer server.Close()
-	notify := func() {
+	notify := func(raw string, want int) {
 		t.Helper()
-		form := url.Values{"source": {"https://source.example/post"}, "target": {target}}
-		res, e := http.PostForm(server.URL+"/webmention", form)
+		res, e := http.PostForm(server.URL+"/webmention", url.Values{"source": {raw}, "target": {target}})
 		if e != nil {
 			t.Fatal(e)
 		}
 		res.Body.Close()
-		if res.StatusCode != 202 {
-			t.Fatalf("受付 %d", res.StatusCode)
+		if res.StatusCode != want {
+			t.Fatalf("受付 %d want %d", res.StatusCode, want)
 		}
 	}
-	wait := func(id string, count int, content string) []Post {
+	drain := func() {
 		t.Helper()
 		deadline := time.Now().Add(4 * time.Second)
 		for time.Now().Before(deadline) {
-			_, ps, e := s.Feed(ctx, id, 100)
 			var n int
-			s.db.QueryRow("SELECT count(*) FROM jobs WHERE state IN ('pending','running')").Scan(&n)
-			if e == nil && len(ps) == count && n == 0 && (count == 0 || strings.Contains(ps[0].MF2, content)) {
-				return ps
+			if e := s.db.QueryRow("SELECT count(*) FROM jobs WHERE state IN ('pending','running')").Scan(&n); e != nil {
+				t.Fatal(e)
+			}
+			if n == 0 {
+				return
 			}
 			time.Sleep(15 * time.Millisecond)
 		}
-		t.Fatalf("処理未完 %s %d", id, count)
-		return nil
+		t.Fatal("job未完了")
 	}
-	notify()
-	ps := wait(id1, 1, "initial")
-	original := ps[0].Updated
-	notify()
-	ps = wait(id1, 1, "initial")
-	if !ps[0].Updated.Equal(original) {
-		t.Fatal("同値日時")
+	raw := "https://source.example/post"
+	notify(raw, 202)
+	drain()
+	if known, e := s.HasSource(ctx, raw); e != nil || known {
+		t.Fatal("初回失敗を保存", e)
 	}
 	mu.Lock()
-	body = fixture(id1, "edited")
+	status = 200
 	mu.Unlock()
-	notify()
-	wait(id1, 1, "edited")
-	mu.Lock()
-	body = fixture(id2, "moved")
-	mu.Unlock()
-	notify()
-	wait(id2, 1, "moved")
-	wait(id1, 0, "")
-	mu.Lock()
-	status = 503
-	mu.Unlock()
-	j := Job{Source: "https://source.example/post", Target: target}
-	notify()
-	wait(id2, 1, "moved")
-	var failed int
-	if e = s.db.QueryRow("SELECT count(*) FROM jobs WHERE state='failed'").Scan(&failed); e != nil || failed != 1 {
-		t.Fatal("5xxの失敗状態", failed, e)
+	notify(raw, 202)
+	drain()
+	up, ps, e := s.Feed(ctx, id1, 100)
+	if e != nil || len(ps) != 1 {
+		t.Fatal(ps, e)
 	}
-	mu.Lock()
-	status = 410
-	mu.Unlock()
-	notify()
-	wait(id2, 0, "")
-	for _, id := range []string{id1, id2} {
-		res, e := http.Get(server.URL + "/collections/" + id + ".atom")
+	original := ps[0]
+	before, e := Atom(target, id1, up, ps, 100)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, change := range []struct {
+		body   string
+		status int
+	}{{fixture(id1, "edited"), 200}, {fixture(id2, "moved"), 200}, {"gone", 410}, {"missing", 404}, {"no link", 200}, {"unavailable", 503}} {
+		mu.Lock()
+		body = change.body
+		status = change.status
+		prev := calls
+		mu.Unlock()
+		notify(raw, 200)
+		drain()
+		mu.Lock()
+		got := calls
+		mu.Unlock()
+		if got != prev {
+			t.Fatal("再通知で取得", got, prev)
+		}
+		up, ps, e = s.Feed(ctx, id1, 100)
 		if e != nil {
 			t.Fatal(e)
 		}
-		if res.StatusCode != 200 || !strings.Contains(res.Header.Get("Content-Type"), "application/atom+xml") {
-			t.Fatal(res.StatusCode)
+		after, e := Atom(target, id1, up, ps, 100)
+		if e != nil || !bytes.Equal(before, after) {
+			t.Fatal("Atom変動", e)
 		}
-		res.Body.Close()
 	}
-	res, _ := http.Get(server.URL + "/collections/550e8400-e29b-41d4-a716-446655449999.atom")
+	if _, _, e = s.Feed(ctx, id2, 100); e != ErrUnknown {
+		t.Fatal("所属移動", e)
+	}
+	res, e := http.Get(server.URL + "/collections/" + id1 + ".atom")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if res.StatusCode != 200 || !strings.Contains(res.Header.Get("Content-Type"), "application/atom+xml") {
+		t.Fatal(res.StatusCode)
+	}
+	res.Body.Close()
+	res, e = http.Get(server.URL + "/collections/" + id2 + ".atom")
+	if e != nil {
+		t.Fatal(e)
+	}
 	if res.StatusCode != 404 {
 		t.Fatal(res.StatusCode)
 	}
 	res.Body.Close()
-	// 停止後に永続受付し、別のStore/Appで再起動する。
 	cancel()
 	a.Wait()
-	mu.Lock()
-	status = 200
-	body = fixture(id1, "restart")
-	mu.Unlock()
-	if e = s.Enqueue(context.Background(), j.Source, target, 100, time.Now()); e != nil {
+	// 受付済みjobが保存直後に中断したケースと、未掲載の通知を同じDBに残す。
+	now := time.Now()
+	if _, e = s.db.Exec("INSERT INTO jobs(source,target,state,attempts,next_at,created) VALUES(?,?,'running',3,?,?)", raw, target, now.UnixNano(), now.UnixNano()); e != nil {
 		t.Fatal(e)
 	}
-	s.Close()
+	fresh := "https://source.example/new"
+	if e = s.Enqueue(context.Background(), fresh, target, 100, now); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Close(); e != nil {
+		t.Fatal(e)
+	}
 	s, e = OpenStore(c.DataDir)
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer s.Close()
+	mu.Lock()
+	body = fixture(id2, "restart")
+	status = 200
+	prior := calls
+	mu.Unlock()
 	ctx2, cancel2 := context.WithCancel(context.Background())
-	defer cancel2()
 	a2, _ := NewApp(c, s, fixtureFetcher{source.Client(), source.URL})
 	if e = a2.Start(ctx2); e != nil {
 		t.Fatal(e)
 	}
 	defer func() { cancel2(); a2.Wait() }()
-	deadline := time.Now().Add(4 * time.Second)
-	for time.Now().Before(deadline) {
-		_, posts, e := s.Feed(ctx2, id1, 100)
-		if e == nil && len(posts) == 1 && strings.Contains(posts[0].MF2, "restart") {
-			if posts[0].Source != j.Source {
-				t.Fatal("id変更")
-			}
-			return
-		}
-		time.Sleep(15 * time.Millisecond)
+	drain()
+	mu.Lock()
+	got := calls
+	mu.Unlock()
+	if got != prior+1 {
+		t.Fatal("保存済みjobを再取得", got, prior)
 	}
-	t.Fatal("再起動通知未処理")
+	up, ps, e = s.Feed(ctx2, id1, 100)
+	if e != nil || len(ps) != 1 || ps[0] != original {
+		t.Fatal("復旧でスナップショット変動", ps, e)
+	}
+	after, e := Atom(target, id1, up, ps, 100)
+	if e != nil || !bytes.Equal(before, after) {
+		t.Fatal("復旧でAtom変動", e)
+	}
+	_, ps, e = s.Feed(ctx2, id2, 100)
+	if e != nil || len(ps) != 1 || ps[0].Source != fresh || !strings.Contains(ps[0].MF2, "restart") {
+		t.Fatal("未掲載通知の復旧", ps, e)
+	}
+	var state string
+	if e = s.db.QueryRow("SELECT state FROM jobs WHERE source=? AND attempts>1", raw).Scan(&state); e != nil || state != "done" {
+		t.Fatal("保存後中断job完了", state, e)
+	}
+}
+
+func TestConcurrentFirstSnapshot(t *testing.T) {
+	s := store(t)
+	ctx := context.Background()
+	r1 := mustRecord(t, id1, "one")
+	r2 := mustRecord(t, id2, "two")
+	j := Job{Source: "https://source.example/concurrent", Target: target}
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			r := r1
+			if i%2 == 1 {
+				r = r2
+			}
+			if e := s.Apply(ctx, j, j.Source, &r, time.Now()); e != nil {
+				t.Error(e)
+			}
+		}(i)
+	}
+	wg.Wait()
+	var count int
+	if e := s.db.QueryRow("SELECT count(*) FROM posts").Scan(&count); e != nil || count != 1 {
+		t.Fatal("重複投稿", count, e)
+	}
+	if e := s.db.QueryRow("SELECT count(*) FROM collections").Scan(&count); e != nil || count != 1 {
+		t.Fatal("競合で余計なcollection", count, e)
+	}
+	if e := s.Enqueue(ctx, j.Source, "https://other.example/", 0, time.Now()); !errors.Is(e, ErrStored) {
+		t.Fatal("保存済みsourceの受付", e)
+	}
+}
+func TestPermanentInitialFailure(t *testing.T) {
+	s := store(t)
+	ctx := context.Background()
+	now := time.Now()
+	if e := s.Enqueue(ctx, "https://source.example/missing", target, 100, now); e != nil {
+		t.Fatal(e)
+	}
+	j, e := s.Claim(ctx, now)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Finish(ctx, j, ErrIneligible, 3, now); e != nil {
+		t.Fatal(e)
+	}
+	var state string
+	if e = s.db.QueryRow("SELECT state FROM jobs WHERE id=?", j.ID).Scan(&state); e != nil || state != "failed" {
+		t.Fatal("検証失敗の再試行", state, e)
+	}
 }
