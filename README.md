@@ -1,76 +1,66 @@
-# indie-mezzanine
+# Indiemezzanine
 
-indie-mezzanineは、公開した記事をコレクション別のAtomフィードにまとめるアプリです。自分のサイトに記事を置き、[Webmention](https://indieweb.org/Webmention)で知らせると、読者がフィードで購読できます。
+Indiemezzanineは、公開した記事をコレクション別のAtomフィードにまとめるアプリです。自分のサイトに記事を置き、[Webmention](https://indieweb.org/Webmention)で知らせると、読者がフィードで購読できます。
 
 ## 思想
 
-[@moja.blue](https://tangled.org/moja.blue)さんが考案した「中二階」のIndieweb実装です。解説は[中二階について - Nawashiro](https://nawashiro.dev/posts/20261005-mezzanine)をご覧ください。
+[@moja.blue](https://tangled.org/moja.blue)さんが考案した「中2階」のIndieweb実装です。[中2階について](https://nawashiro.dev/posts/20261005-mezzanine)をご覧ください。
 
 ## 起動
 
-運用者はDocker Engine、Docker Compose、Cloudflareの公開ホスト名、リモート管理Tunnelを用意してください。
-Composeはリレーとcloudflaredを起動します。Cloudflareは公開HTTPSを終端します。
-ホストへのcloudflared導入、リバースプロキシ、TLS証明書管理は不要です。
+### 1. 公開
 
-Cloudflare側で公開ホスト名の転送先を `http://relay:8080` に設定してください。
-`localhost` はcloudflared自身を指すため、転送先に指定しないでください。
-公開Webmention受付とAtom購読には、Cloudflare Accessのログインや対話型チャレンジを要求しないでください。
-ブラウザー整合性チェックがWebmention送信者やフィードリーダーを拒否する場合、公開ホスト名への適用を除外してください。
+デフォルトのComposeではCloudflare Tunnelを使用します。
+
+1. Cloudflare側で公開ホスト名の転送先を `http://relay:8080` に設定してください。
+2. 公開Webmention受付とAtom購読を公開してください。
+   `Cloudflare > セキュリティ > セキュリティルール > カスタムルール` を開いてください。
+   ホスト名・GETとPOST を選択し、WAFやブラウザ整合性チェックなどをスキップしてください。
+
+### 2. 環境変数
+
+[.env.example](.env.example)が設定例です。コピーして利用してください。
 
 ```sh
 cp .env.example .env
 ```
 
-`.env` の `PUBLIC_URL` を同じ公開ホスト名のHTTPSルートURL（例: `https://relay.example/`）に変更してください。
-サブパス・認証情報・クエリ・フラグメントは含めません。
+### 3. 永続化ディレクトリ
 
-運用者はTunnelトークンを環境変数 `CLOUDFLARED` に指定してください。
-Composeはシェルの環境変数を優先します。運用者は未追跡の `.env` でも指定できます。
-未設定または空の値は、Composeの起動エラーになります。
-Composeは値をcloudflaredの `TUNNEL_TOKEN` へ渡します。リレーはトークンを受け取りません。
-
-トークンをコマンド引数、ログ、バージョン管理へ記録しないでください。
-`docker compose config` の出力はトークンを含むため、表示・保存しないでください。
-設定検証には `docker compose config --quiet` を使ってください。
-Docker管理権限を持つ利用者はコンテナの環境変数を参照できます。
+UID/GID 65532、権限0750の保存先ディレクトリを作ってください。
 
 ```sh
 sudo install -d -o 65532 -g 65532 -m 0750 ./data
-docker compose config --quiet
-docker compose up -d --build
-docker compose exec relay /mezzanine healthcheck
 ```
 
-ComposeはホストへHTTPポートを公開しません。
-cloudflaredはComposeネットワーク経由で `relay:8080` へ接続します。
-運用者は公開URLでルートページとWebmention endpointの広告を確認してください。
+### 4. Dockerコンテナ
 
-`docker compose exec relay /mezzanine healthcheck` はリレーのHTTP、保存先、workerを確認します。
-この確認はTunnelの接続状態や公開到達性を保証しません。
-公開URLへ接続できない場合、Cloudflare側の転送先とTunnel接続状態を確認してください。
-cloudflaredのイメージ更新は、Composeの固定バージョンとdigestの更新で管理します。
+〆です。
 
-保存先はホストの `./data` です。変更する場合は、`.env` の `HOST_DATA_DIR` と作成するディレクトリを揃えてください。SELinuxが有効なホストでは、保存先にコンテナ用ラベルも設定してください。
-
-## 投稿と購読
-
-[ページ例](examples/post.html)のコレクションUUIDとリレーへのリンクを変更し、記事のHTMLを公開してください。一つのページに一つの `h-entry` と一つのコレクションを置きます。
-
-`PUBLIC_URL` へのリンクを含め、Webmentionで通知してください。
-
-```html
-<a href="https://relay.example/"></a>
+```sh
+docker compose config --quiet # 設定チェック
+docker compose up -d --build # 立てる
+docker compose exec relay /mezzanine healthcheck # リレーのHTTP、保存先、workerチェック
 ```
 
-HTTP 202は受付を示し、掲載の保証ではありません。原本を取得・検証してから掲載します。保存済みの記事の再通知にはHTTP 200を返し、原本を再取得しません。
+## 投稿
 
-読者は以下のURLをフィードリーダーに登録します。ホスト名とUUIDは、投稿先と記事に指定した値に置き換えてください。
+[ページ例](examples/post.html)をご覧ください。
+
+- ページはMicroformat2でマークアップしてください。Indiemezzanineは1ページに1件の[h-entry](https://microformats.org/wiki/h-entry)を読みます。
+- 中2階はUUIDで区別します。ページに中2階への`rel=collection`を置いてください。`<link rel="collection" href="bbe44bfe-3a9c-410e-ad37-f1bf7402bce4">`
+- `PUBLIC_URL` へのリンクを置いてください。`<a href="https://relay.example/"></a>`
+
+リンク宛に出版ソフトやツールを使って[Webmention](https://indieweb.org/Webmention)を送信してください。
+
+- 受け付けると`HTTP 202`を返します。
+- 最初の検証に成功した内容のみ保存します。更新には対応していません。
+
+読者は、著者が`rel=collection`で指定したUUIDをRSSリーダーなどで購読できます。
 
 ```text
-https://relay.example/collections/550e8400-e29b-41d4-a716-446655440000.atom
+https://relay.example/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.atom
 ```
-
-最初の検証に成功した内容のみ保存します。更新には対応していません。
 
 ## バックアップ
 
@@ -83,5 +73,6 @@ https://relay.example/collections/550e8400-e29b-41d4-a716-446655440000.atom
 
 ## ライセンス
 
-本体は [MIT License](LICENSE) です。依存物の権利表示は[第三者通知](docs/THIRD_PARTY_NOTICES.txt)を参照してください。
-コンテナのOS資産には元のライセンス条件が適用されます。イメージ全体がMITライセンスではありません。
+- 本体は [MIT License](LICENSE) です。
+- 依存物の権利表示は[第三者通知](docs/THIRD_PARTY_NOTICES.txt)を参照してください。
+- コンテナのOS資産には元のライセンス条件が適用されます。
