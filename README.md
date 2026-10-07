@@ -28,13 +28,10 @@ HTTPの接続先は既定で `127.0.0.1:8080` です。リバースプロキシ�
 
 [ページ例](examples/post.html)のコレクションUUIDとリレーへのリンクを変更し、記事のHTMLを公開してください。一つのページに一つの `h-entry` と一つのコレクションを置きます。
 
-次に記事のURLを通知します。以下の `source` を記事のURLに、`target` を `PUBLIC_URL` と同じURLに置き換えてください。通知先のホスト名も変更してください。
+`PUBLIC_URL` へのリンクを含め、Webmentionで通知してください。
 
-```sh
-curl --fail-with-body -i \
-  --data-urlencode 'source=https://author.example/post' \
-  --data-urlencode 'target=https://relay.example/' \
-  https://relay.example/webmention
+```html
+<a href="https://relay.example/"></a>
 ```
 
 HTTP 202は受付を示し、掲載の保証ではありません。原本を取得・検証してから掲載します。保存済みの記事の再通知にはHTTP 200を返し、原本を再取得しません。
