@@ -1,8 +1,6 @@
-.env
-.env.*
-!.env.example
-node_modules/
-.venv/
-__pycache__/
-*.py[cod]
-.DS_Store
+/bin/
+/data/
+/.env
+*.db
+*.db-wal
+*.db-shm
