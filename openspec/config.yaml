@@ -4,7 +4,7 @@ context: |
   Language: Japanese
   All artifacts must be written in Japanese.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
-  Project: mezzanine (working name), based on the 「中二階」 concept.
+  Project: indie-mezzanine, based on the 「中二階」 concept.
   Source: https://nawashiro.dev/posts/20261005-mezzanine
   Goal: small shared spaces identified by random identifiers, with private local nicknames.
   Accepted initial change: build-public-collection-relay.

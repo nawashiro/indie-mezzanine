@@ -192,9 +192,9 @@ func TestBodyAndTimeLimits(t *testing.T) {
 	}
 }
 func TestFetchDNSChangeIsolated(t *testing.T) {
-	if os.Getenv("MEZZANINE_DNS_CHILD") != "1" {
+	if os.Getenv("INDIE_MEZZANINE_DNS_CHILD") != "1" {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestFetchDNSChangeIsolated$", "-test.timeout=10s")
-		cmd.Env = append(os.Environ(), "MEZZANINE_DNS_CHILD=1")
+		cmd.Env = append(os.Environ(), "INDIE_MEZZANINE_DNS_CHILD=1")
 		out, e := cmd.CombinedOutput()
 		if e != nil {
 			t.Fatalf("隔離DNS検証: %v\n%s", e, out)

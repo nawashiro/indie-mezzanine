@@ -29,6 +29,10 @@ class ComposeTests(unittest.TestCase):
         result = config()
         self.assertEqual(result.returncode, 0, "Compose設定検証失敗")
         doc = json.loads(result.stdout)
+        self.assertEqual(doc["name"], "indie-mezzanine")
+        self.assertEqual(doc["services"]["relay"]["image"], "indie-mezzanine:local")
+        self.assertEqual(doc["services"]["relay"]["healthcheck"]["test"],
+                         ["CMD", "/indie-mezzanine", "healthcheck"])
         self.assertEqual(set(doc["services"]), {"relay", "cloudflared"})
         self.assertFalse(doc.get("volumes"))
         for service in doc["services"].values():
@@ -49,7 +53,8 @@ class ComposeTests(unittest.TestCase):
         self.assertEqual(volume["type"], "bind")
         self.assertEqual(volume["source"], str(ROOT / "data"))
         self.assertEqual(volume["target"], "/data")
-        self.assertFalse(volume["bind"]["create_host_path"])
+        # Composeはfalseの項目をJSONから省略する。
+        self.assertIs(volume["bind"].get("create_host_path", False), False)
         self.assertEqual(relay["environment"]["DATA_DIR"], "/data")
         self.assertRegex(tunnel["image"], r":\d{4}\.\d+\.\d+@sha256:[a-f0-9]{64}$")
         self.assertEqual(tunnel["depends_on"]["relay"]["condition"], "service_healthy")
@@ -73,10 +78,10 @@ class ComposeTests(unittest.TestCase):
                 self.assertNotIn("compose-test-token", result.stderr)
 
     def test_custom_host_data_directory(self):
-        result = config(data="/tmp/mezzanine-compose-test-data")
+        result = config(data="/tmp/indie-mezzanine-compose-test-data")
         self.assertEqual(result.returncode, 0, "Compose設定検証失敗")
         volume, = json.loads(result.stdout)["services"]["relay"]["volumes"]
-        self.assertEqual(volume["source"], "/tmp/mezzanine-compose-test-data")
+        self.assertEqual(volume["source"], "/tmp/indie-mezzanine-compose-test-data")
         self.assertEqual(volume["target"], "/data")
 
 

@@ -123,7 +123,7 @@ entry idは受付時のsource URLとする。u-urlやリダイレクト先URLは
 
 メタデータの代替案は次の規則とする。
 - feed title: 正規collection URN。
-- feed author: 「mezzanine relay」。各entryは投稿者のauthorを別に持つ。
+- feed author: 「indie-mezzanine」。各entryは投稿者のauthorを別に持つ。
 - entry title: mf2のname。欠落時はsource URL。
 - author: 入れ子の著者name。欠落時は表示名「投稿者不明」。
 - published: 有効なmf2日時がある場合だけ出力する。

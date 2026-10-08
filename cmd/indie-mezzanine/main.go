@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"indie-mezzanine/internal/relay"
 	"log"
-	"mezzanine/internal/relay"
 	"net/http"
 	"os"
 	"os/signal"
@@ -61,7 +61,7 @@ func run() error {
 	server := app.Server()
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
-	log.Printf("mezzanine listening on %s", c.Listen)
+	log.Printf("indie-mezzanine listening on %s", c.Listen)
 	select {
 	case e = <-result:
 		cancel()

@@ -1,4 +1,4 @@
-module mezzanine
+module indie-mezzanine
 
 go 1.27.1
 

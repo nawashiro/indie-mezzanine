@@ -61,7 +61,7 @@ func (f *SafeFetcher) Fetch(ctx context.Context, raw string) (Page, error) {
 		return Page{}, e
 	}
 	req.Header.Set("Accept", "text/html, application/xhtml+xml;q=0.9")
-	req.Header.Set("User-Agent", "mezzanine Webmention receiver")
+	req.Header.Set("User-Agent", "indie-mezzanine Webmention receiver")
 	res, e := f.client.Do(req)
 	if e != nil {
 		return Page{}, e

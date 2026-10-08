@@ -2,7 +2,7 @@
 
 ## Why
 
-投稿者は自分の公開ページを、共通の識別子で小さな共有空間に束ねる。mezzanineは既存のWebmentionとmicroformats2を使い、この集合をAtomとして配信する公開リレーを提供する。
+投稿者は自分の公開ページを、共通の識別子で小さな共有空間に束ねる。indie-mezzanineは既存のWebmentionとmicroformats2を使い、この集合をAtomとして配信する公開リレーを提供する。
 
 ## What Changes
 

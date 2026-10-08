@@ -30,7 +30,7 @@ func OpenStore(dir string) (*Store, error) {
 	if e := os.MkdirAll(dir, 0750); e != nil {
 		return nil, e
 	}
-	db, e := sql.Open("sqlite", filepath.Join(dir, "mezzanine.db"))
+	db, e := sql.Open("sqlite", filepath.Join(dir, "indie-mezzanine.db"))
 	if e != nil {
 		return nil, e
 	}

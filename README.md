@@ -40,7 +40,7 @@ sudo install -d -o 65532 -g 65532 -m 0750 ./data
 ```sh
 docker compose config --quiet # 設定チェック
 docker compose up -d --build # 立てる
-docker compose exec relay /mezzanine healthcheck # リレーのHTTP、保存先、workerチェック
+docker compose exec relay /indie-mezzanine healthcheck # リレーのHTTP、保存先、workerチェック
 ```
 
 ## 投稿

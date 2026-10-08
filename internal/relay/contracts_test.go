@@ -90,6 +90,7 @@ func TestExampleSubmissionAndFeed(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	const exampleCollection = "bbe44bfe-3a9c-410e-ad37-f1bf7402bce4"
 	if _, e = Parse(page(string(html)), target); e != nil {
 		t.Fatal("投稿例", e)
 	}
@@ -119,7 +120,7 @@ func TestExampleSubmissionAndFeed(t *testing.T) {
 	}
 	// worker開始前に通知する。受付と掲載を区別する。
 	notify(http.StatusAccepted)
-	if _, _, e = s.Feed(context.Background(), id1, 100); e != ErrUnknown {
+	if _, _, e = s.Feed(context.Background(), exampleCollection, 100); e != ErrUnknown {
 		t.Fatal("検証前に掲載")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -130,7 +131,7 @@ func TestExampleSubmissionAndFeed(t *testing.T) {
 	defer func() { cancel(); a.Wait() }()
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		res, e := server.Client().Get(server.URL + "/collections/" + id1 + ".atom")
+		res, e := server.Client().Get(server.URL + "/collections/" + exampleCollection + ".atom")
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -165,12 +166,12 @@ func TestBackupRestoreAndInterruptedJobs(t *testing.T) {
 	if e = s.Close(); e != nil {
 		t.Fatal(e)
 	}
-	backup, e := os.ReadFile(filepath.Join(dir, "mezzanine.db"))
+	backup, e := os.ReadFile(filepath.Join(dir, "indie-mezzanine.db"))
 	if e != nil {
 		t.Fatal(e)
 	}
 	restore := t.TempDir()
-	if e = os.WriteFile(filepath.Join(restore, "mezzanine.db"), backup, 0600); e != nil {
+	if e = os.WriteFile(filepath.Join(restore, "indie-mezzanine.db"), backup, 0600); e != nil {
 		t.Fatal(e)
 	}
 	s, e = OpenStore(restore)

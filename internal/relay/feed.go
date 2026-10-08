@@ -61,7 +61,7 @@ func Atom(public, id string, updated time.Time, posts []Post, limit int) ([]byte
 	if len(posts) > limit {
 		posts = posts[:limit]
 	}
-	f := feeds.AtomFeed{Xmlns: "http://www.w3.org/2005/Atom", Title: "urn:uuid:" + id, Id: "urn:uuid:" + id, Updated: updated.UTC().Format(time.RFC3339Nano), Link: &feeds.AtomLink{Href: strings.TrimRight(public, "/") + "/collections/" + id + ".atom", Rel: "self", Type: "application/atom+xml"}, Author: &feeds.AtomAuthor{Name: "mezzanine relay"}}
+	f := feeds.AtomFeed{Xmlns: "http://www.w3.org/2005/Atom", Title: "urn:uuid:" + id, Id: "urn:uuid:" + id, Updated: updated.UTC().Format(time.RFC3339Nano), Link: &feeds.AtomLink{Href: strings.TrimRight(public, "/") + "/collections/" + id + ".atom", Rel: "self", Type: "application/atom+xml"}, Author: &feeds.AtomAuthor{Name: "indie-mezzanine"}}
 	for _, p := range posts {
 		props := properties(p.MF2)
 		title := text(first(props, "name"))
