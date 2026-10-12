@@ -13,6 +13,9 @@ import (
 
 var ErrFull = errors.New("通知キュー満杯")
 var ErrStored = errors.New("保存済みsource")
+
+// ErrOutstanding reports a durably confirmed unfinished job, not publication.
+var ErrOutstanding = errors.New("処理待ちsource")
 var ErrUnknown = errors.New("未知のcollection")
 
 type Store struct{ db *sql.DB }
@@ -81,6 +84,15 @@ func (s *Store) Enqueue(ctx context.Context, source, target string, limit int, n
 	}
 	if known {
 		return ErrStored
+	}
+	if e = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM jobs WHERE source=? AND state IN ('pending','running'))", source).Scan(&known); e != nil {
+		return e
+	}
+	if known {
+		if e = tx.Commit(); e != nil {
+			return e
+		}
+		return ErrOutstanding
 	}
 	var n int
 	e = tx.QueryRow("SELECT count(*) FROM jobs WHERE state IN ('pending','running')").Scan(&n)

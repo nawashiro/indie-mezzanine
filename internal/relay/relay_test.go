@@ -247,13 +247,13 @@ func TestQueue(t *testing.T) {
 				mu.Lock()
 				accepted++
 				mu.Unlock()
-			} else if !errors.Is(e, ErrFull) {
+			} else if !errors.Is(e, ErrOutstanding) {
 				t.Error(e)
 			}
 		}()
 	}
 	wg.Wait()
-	if accepted != 3 {
+	if accepted != 1 {
 		t.Fatal(accepted)
 	}
 	j, e := s.Claim(ctx, now)
@@ -405,7 +405,11 @@ func TestHTTPAdmission(t *testing.T) {
 	if n := send("POST", form); n != 202 {
 		t.Fatal(n)
 	}
-	if n := send("POST", form); n != 503 {
+	if n := send("POST", form); n != 202 {
+		t.Fatal(n)
+	}
+	otherForm := url.Values{"source": {"https://source.example/other"}, "target": {target}}.Encode()
+	if n := send("POST", otherForm); n != 503 {
 		t.Fatal(n)
 	}
 	r := mustRecord(t, id1, "stored")

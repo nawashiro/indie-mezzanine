@@ -46,6 +46,11 @@ func attr(n *html.Node, k string) string {
 	return ""
 }
 func Parse(p Page, target string) (Record, error) {
+	targetURL, e := url.Parse(target)
+	if e != nil {
+		return Record{}, e
+	}
+	targetRoot := rootURLString(targetURL)
 	base, e := url.Parse(p.URL)
 	if e != nil {
 		return Record{}, e
@@ -98,7 +103,7 @@ func Parse(p Page, target string) (Record, error) {
 		for _, a := range n.Attr {
 			if a.Key == key || (n.Data == "img" && a.Key == "src") || (n.Data == "video" && a.Key == "poster") {
 				u, e := url.Parse(a.Val)
-				if e == nil && base.ResolveReference(u).String() == target {
+				if e == nil && rootURLString(base.ResolveReference(u)) == targetRoot {
 					linked = true
 				}
 			}

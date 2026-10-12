@@ -147,21 +147,30 @@ func (a *App) Handler() http.Handler {
 			return
 		}
 		source, target := r.PostForm.Get("source"), r.PostForm.Get("target")
-		if _, e = sourceURL(source); e != nil || source == target || target != a.Config.PublicURL {
+		u, sourceErr := sourceURL(source)
+		t, targetErr := url.Parse(target)
+		public, _ := url.Parse(a.Config.PublicURL)
+		if sourceErr != nil || targetErr != nil || rootURLString(t) != rootURLString(public) {
 			http.Error(w, "source/targetが不正", 400)
 			return
 		}
 		// targetだけとfragmentが異なるsourceも同じ資源として拒否する。
-		u, _ := url.Parse(source)
 		u.Fragment = ""
-		if u.String() == target {
+		u.RawFragment = ""
+		if rootURLString(u) == rootURLString(t) {
 			http.Error(w, "sourceとtargetが同じ", 400)
 			return
 		}
-		e = a.Store.Enqueue(r.Context(), source, target, a.Config.Queue, time.Now())
+		e = a.Store.Enqueue(r.Context(), source, rootURLString(t), a.Config.Queue, time.Now())
 		if errors.Is(e, ErrStored) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			fmt.Fprintln(w, "保存済みスナップショットを保持しました。再取得と変更は行いません。")
+			return
+		}
+		if errors.Is(e, ErrOutstanding) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(202)
+			fmt.Fprintln(w, "通知は永続受付済みです。既存の処理を継続します。掲載は原本検証後です。")
 			return
 		}
 		if errors.Is(e, ErrFull) {

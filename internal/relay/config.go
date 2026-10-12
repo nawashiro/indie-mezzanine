@@ -22,7 +22,7 @@ func DefaultConfig() Config {
 func (c Config) Validate() error {
 	u, e := url.Parse(c.PublicURL)
 	if e != nil || u == nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawPath != "" || (u.Path != "" && u.Path != "/") {
-		return fmt.Errorf("PUBLIC_URL は認証情報・query・fragmentなしのHTTP(S)ルートURL（末尾 /）が必要")
+		return fmt.Errorf("PUBLIC_URL は認証情報・query・fragmentなしのHTTP(S)ルートURL（末尾 / は省略可）が必要")
 	}
 	if c.DataDir == "" || c.Listen == "" || c.FetchTimeout <= 0 || c.MaxBody <= 0 || c.MaxForm <= 0 || c.Redirects <= 0 || c.Workers <= 0 || c.Queue <= 0 || c.FeedLimit <= 0 || c.Attempts <= 0 || c.Retention <= 0 {
 		return fmt.Errorf("データディレクトリと有限の正の資源上限が必要")
