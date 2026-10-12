@@ -14,9 +14,9 @@
 
 ## 3. コンテナと運用入口
 
-- [ ] 3.1 実装者はDockerfileのビルド先、COPY、ENTRYPOINT、HEALTHCHECKを新名へ揃える。検証: イメージのビルドが成功し、起動入口が `/indie-mezzanine` となる。
+- [x] 3.1 実装者はDockerfileのビルド先、COPY、ENTRYPOINT、HEALTHCHECKを新名へ揃える。検証: イメージのビルドが成功し、起動入口が `/indie-mezzanine` となる。
 - [x] 3.2 実装者はComposeプロジェクト、イメージ、ヘルスチェック、テスト用パスを更新する。検証: `python3 tests/compose_test.py` は新名と既存の配備制約を確認する。
-- [ ] 3.3 実装者はREADMEのヘルスチェック例を更新する。検証: 隔離した新名コンテナで文書と同じ `/indie-mezzanine healthcheck` が成功する。
+- [x] 3.3 実装者はREADMEのヘルスチェック例を更新する。検証: 隔離した新名コンテナで文書と同じ `/indie-mezzanine healthcheck` が成功する。
 
 ## 4. 統合検証
 
@@ -31,7 +31,7 @@
 
 - 改名コードと文書の変更は実装済み。検証者はコンテナ検証のないタスクを完了扱いにしない。
 - 新名のビルド、単体起動、ヘルスチェック、DB作成、命名・復元・DNSテストのrace検査、go vet、両changeのstrict検証は成功した。
-- 3.1と3.3: Dockerデーモン接続不可。イメージビルドと実コンテナのヘルスチェックは未検証。Nawashiroは後でFedoraで検証する。未完了として保持する。
+- 3.1と3.3: Dockerデーモン（server 29.7.2）に接続できる環境で実機検証した。`docker build -t indie-mezzanine:local .` は成功し、イメージのENTRYPOINTは `/indie-mezzanine`、HEALTHCHECKは `/indie-mezzanine healthcheck`。隔離した新名コンテナ（user 65532、read-only、named volume）は `indie-mezzanine listening on :8080` を記録し、`indie-mezzanine.db` を作成した。文書と同じ `/indie-mezzanine healthcheck` は終了コード0で成功した。検証後、隔離コンテナとボリュームは削除した。
 - 3.2: テストは `bind.create_host_path` の省略またはfalseを許可し、trueを拒否する。Composeの4テストは成功した。
 - 4.2: 投稿例のUUID `bbe44bfe-3a9c-410e-ad37-f1bf7402bce4` をテストへコピーして固定した。Go全体テスト、go vet、race検査は成功した。Composeテストも成功したためタスクを完了とする。
 - 検証者は変更前HEADの独立コピーでも両テストの失敗を再現した。UUID不一致は利用者の承認で修正した。JSONキーの省略対応も利用者の承認で修正した。
