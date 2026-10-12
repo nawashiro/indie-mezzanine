@@ -55,10 +55,6 @@ docker compose exec relay /indie-mezzanine healthcheck # リレーのHTTP、保�
 
 ## バックアップ
 
-ルートURL比較の更新では、既存job、投稿、source識別子、SQLiteスキーマの書換えは不要です。更新前にリレーを停止し、保存先全体をバックアップしてください。同じ設定と保存先で新しいイメージを起動してください。
-
-過去の検証失敗は自動再処理しません。未保存の記事を修正し、再通知してください。旧イメージへ戻す場合、データベースの逆移行は不要です。ただし末尾 `/` に依存する旧判定が再発します。受付と未処理通知を確認してください。
-
 - `docker compose stop relay` で停止し、保存先全体をコピーしてください。コピー後は `docker compose start relay` で再開します。
 - コンテナの再作成には `docker compose up -d --force-recreate` を使ってください。同じ保存先を使う場合、投稿と受付済み通知は残ります。
 
