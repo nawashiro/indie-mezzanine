@@ -4,7 +4,15 @@ indie-mezzanineは、個人サイトのページを、特にテーマの決ま�
 
 ## 思想
 
-[@moja.blue](https://tangled.org/moja.blue)さんが考案した「中2階」のIndieweb実装です。[中2階について](https://nawashiro.dev/posts/20261005-mezzanine)をご覧ください。
+[@moja.blue](https://tangled.org/moja.blue)さんが考案した「中2階」のIndieweb実装です。[私の解釈はこうです。](https://nawashiro.dev/posts/20261005-mezzanine)
+
+- フィードに共通の話題がなんとなくある。明示はされない。空気は読んでもいいし、無視してもいい。
+- 小さな空間だ。SNSのような大海に放り出されない。
+- 誰でも始められる。識別子はただのランダムな文字列だ。
+
+## 投稿
+
+[利用者向け解説](internal/relay/landing.md)を読んでください。`/`はサーバーのルートURLを指しています。例 `/webmention` → `https://example.com/webmention`
 
 ## 起動
 
@@ -41,40 +49,6 @@ sudo install -d -o 65532 -g 65532 -m 0750 ./data
 docker compose config --quiet # 設定チェック
 docker compose up -d --build # 立てる
 docker compose exec relay /indie-mezzanine healthcheck # リレーのHTTP、保存先、workerチェック
-```
-
-## 投稿
-
-[ページ例](examples/post.html)をご覧ください。
-
-- ページは[Microformat2](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Microformats)でマークアップしてください。サーバーは1ページに1件の[h-entry](https://microformats.org/wiki/h-entry)を読みます。
-- UUIDへの`rel="collection"`リンクを置いてください。
-  - `<link rel="collection" href="urn:uuid:bbe44bfe-3a9c-410e-ad37-f1bf7402bce4">`
-  - これが中2階のIDです。サーバーはこれを見てフィードを組み立てます。
-- `PUBLIC_URL`へのリンクを置いてください。
-  - `<a href="https://relay.example/"></a>`
-
-リンク宛に出版ソフトやツールを使って[Webmention](https://indieweb.org/Webmention)を送信してください。
-
-- 受け付けると`HTTP 202`を返します。
-- 最初の検証に成功した内容のみ保存します。更新には対応していません。
-
-## 閲覧
-
-読者は、著者が`rel="collection"`で指定したUUIDをRSSリーダーなどで購読できます。
-
-### Atom Feed
-
-```text
-https://relay.example/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.atom
-```
-
-### [JF2 Feed](https://jf2.spec.indieweb.org/)
-
-メディアタイプは`application/jf2feed+json`です。`email`はわざと消しています。
-
-```text
-https://relay.example/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.jf2
 ```
 
 ## バックアップ

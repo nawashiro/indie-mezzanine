@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"html"
 	"log"
 	"mime"
 	"net/http"
@@ -20,6 +19,7 @@ type App struct {
 	Config    Config
 	Store     *Store
 	Fetcher   Fetcher
+	landing   []byte
 	active    atomic.Int32
 	unhealthy atomic.Bool
 	wg        sync.WaitGroup
@@ -32,7 +32,11 @@ func NewApp(c Config, s *Store, f Fetcher) (*App, error) {
 	if s == nil || f == nil {
 		return nil, fmt.Errorf("処理依存が必要")
 	}
-	return &App{Config: c, Store: s, Fetcher: f}, nil
+	landing, e := landingDocument(c.PublicURL)
+	if e != nil {
+		return nil, e
+	}
+	return &App{Config: c, Store: s, Fetcher: f, landing: landing}, nil
 }
 func (a *App) Process(ctx context.Context, j Job) error {
 	known, e := a.Store.HasSource(ctx, j.Source)
@@ -125,7 +129,7 @@ func (a *App) Handler() http.Handler {
 		endpoint := strings.TrimRight(a.Config.PublicURL, "/") + "/webmention"
 		w.Header().Set("Link", "<"+endpoint+">; rel=\"webmention\"")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>indie-mezzanine</title><link rel="webmention" href="%s"></head><body><h1>indie-mezzanine</h1><p>公開ページの単一h-entryとUUID collectionをAtomに束ねるリレーです。Webmentionの受付は掲載の保証ではありません。最初に検証成功したスナップショットを固定し、原本の更新・所属移動・削除には追従しません。</p></body></html>`, html.EscapeString(endpoint))
+		w.Write(a.landing)
 	})
 	m.HandleFunc("POST /webmention", func(w http.ResponseWriter, r *http.Request) {
 		media, _, e := mime.ParseMediaType(r.Header.Get("Content-Type"))

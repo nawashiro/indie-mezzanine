@@ -6,6 +6,7 @@ require (
 	github.com/doyensec/safeurl v0.2.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/feeds v1.2.0
+	github.com/yuin/goldmark v1.8.6
 	golang.org/x/net v0.56.0
 	modernc.org/sqlite v1.46.1
 	willnorris.com/go/microformats v1.2.0
