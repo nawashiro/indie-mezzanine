@@ -137,6 +137,9 @@ func TestExampleSubmissionAndFeed(t *testing.T) {
 		}
 		res.Body.Close()
 		if res.StatusCode == http.StatusOK {
+			if res.Header.Get("Access-Control-Allow-Origin") != "*" || res.Header.Get("Access-Control-Allow-Credentials") != "" {
+				t.Fatalf("CORS許可 %q %q", res.Header.Get("Access-Control-Allow-Origin"), res.Header.Get("Access-Control-Allow-Credentials"))
+			}
 			notify(http.StatusOK)
 			return
 		}

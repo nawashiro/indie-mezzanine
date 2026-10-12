@@ -177,6 +177,8 @@ func (a *App) Handler() http.Handler {
 		fmt.Fprintln(w, "通知を永続受付しました。掲載は原本検証後です。")
 	})
 	m.HandleFunc("GET /collections/{name}", func(w http.ResponseWriter, r *http.Request) {
+		// feedは公開データのため、任意オリジンのブラウザアプリからの読み取りを許可する。
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		name := r.PathValue("name")
 		suffix := ""
 		switch {

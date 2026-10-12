@@ -238,21 +238,53 @@ func TestJF2HTTPContract(t *testing.T) {
 		h.ServeHTTP(w, httptest.NewRequest("GET", "http://relay.example"+path, nil))
 		return w
 	}
+	cors := func(w *httptest.ResponseRecorder) {
+		t.Helper()
+		if w.Header().Get("Access-Control-Allow-Origin") != "*" {
+			t.Fatalf("CORS許可なし %q", w.Header().Get("Access-Control-Allow-Origin"))
+		}
+		if w.Header().Get("Access-Control-Allow-Credentials") != "" {
+			t.Fatalf("認証情報付き許可 %q", w.Header().Get("Access-Control-Allow-Credentials"))
+		}
+	}
 	w := get("/collections/" + id1 + ".jf2")
 	if w.Code != 200 || w.Header().Get("Content-Type") != "application/jf2feed+json" {
 		t.Fatalf("jf2 %d %q", w.Code, w.Header().Get("Content-Type"))
 	}
+	cors(w)
 	f := jf2Parse(t, w.Body.Bytes())
 	if f["name"] != "urn:uuid:"+id1 || len(jf2ChildrenOf(t, f)) != 1 {
 		t.Fatalf("%#v", f)
 	}
-	if w := get("/collections/" + id1 + ".atom"); w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "application/atom+xml") {
+	if w = get("/collections/" + id1 + ".atom"); w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "application/atom+xml") {
 		t.Fatalf("atom %d %q", w.Code, w.Header().Get("Content-Type"))
 	}
+	cors(w)
 	for _, path := range []string{"/collections/" + id2 + ".jf2", "/collections/nope.jf2", "/collections/" + id1 + ".json", "/collections/" + id1} {
-		if w := get(path); w.Code != 404 {
+		w = get(path)
+		if w.Code != 404 {
 			t.Fatalf("%s %d", path, w.Code)
 		}
+		cors(w)
+	}
+}
+
+func TestFeedCORSOnStoreFailure(t *testing.T) {
+	s := store(t)
+	a, e := NewApp(config(t), s, resultFetcher{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Close(); e != nil {
+		t.Fatal(e)
+	}
+	w := httptest.NewRecorder()
+	a.Handler().ServeHTTP(w, httptest.NewRequest("GET", "http://relay.example/collections/"+id1+".jf2", nil))
+	if w.Code != 503 {
+		t.Fatalf("保存失敗 %d", w.Code)
+	}
+	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("CORS許可なし %q", w.Header().Get("Access-Control-Allow-Origin"))
 	}
 }
 
