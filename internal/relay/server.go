@@ -174,12 +174,18 @@ func (a *App) Handler() http.Handler {
 	})
 	m.HandleFunc("GET /collections/{name}", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
-		if !strings.HasSuffix(name, ".atom") {
+		suffix := ""
+		switch {
+		case strings.HasSuffix(name, ".atom"):
+			suffix = ".atom"
+		case strings.HasSuffix(name, ".jf2"):
+			suffix = ".jf2"
+		}
+		if suffix == "" {
 			http.NotFound(w, r)
 			return
 		}
-		raw := strings.TrimSuffix(name, ".atom")
-		id, e := Collection("urn:uuid:" + raw)
+		id, e := Collection("urn:uuid:" + strings.TrimSuffix(name, suffix))
 		if e != nil {
 			http.NotFound(w, r)
 			return
@@ -191,6 +197,16 @@ func (a *App) Handler() http.Handler {
 		}
 		if e != nil {
 			http.Error(w, "保存データの取得失敗", 503)
+			return
+		}
+		if suffix == ".jf2" {
+			b, e := JF2(a.Config.PublicURL, id, posts, a.Config.FeedLimit)
+			if e != nil {
+				http.Error(w, "JF2生成失敗", 500)
+				return
+			}
+			w.Header().Set("Content-Type", "application/jf2feed+json")
+			w.Write(b)
 			return
 		}
 		b, e := Atom(a.Config.PublicURL, id, updated, posts, a.Config.FeedLimit)

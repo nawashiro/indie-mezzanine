@@ -2,7 +2,7 @@
 
 ## Purpose
 
-購読者はcollection単位のAtomから検証済み投稿を読む。同じcollectionと投稿の識別子はリレーをまたいで一致し、読む側の将来の集約に使う。リレーは保存済みのmf2を正本としてAtomを生成する。
+購読者はcollection単位のAtomから、ビューワーはcollection単位のJF2 Feedから、同じ検証済み投稿を読む。同じcollectionと投稿の識別子はリレーをまたいで一致し、読む側の将来の集約に使う。リレーは保存済みのmf2を正本として両形式を生成する。
 
 ## Requirements
 

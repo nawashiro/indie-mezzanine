@@ -1,6 +1,6 @@
 # indie-mezzanine
 
-indie-mezzanineは、個人サイトのページを、特にテーマの決まっていないフィードに追加できる仕組みです。著者のオプトイン式、配信はAtomです。
+indie-mezzanineは、個人サイトのページを、特にテーマの決まっていないフィードに追加できる仕組みです。著者のオプトイン式、配信はAtomとJF2 Feedです。
 
 ## 思想
 
@@ -13,7 +13,7 @@ indie-mezzanineは、個人サイトのページを、特にテーマの決ま�
 デフォルトのComposeではCloudflare Tunnelを使用します。
 
 1. Cloudflare側で公開ホスト名の転送先を `http://relay:8080` に設定してください。
-2. 公開Webmention受付とAtom購読を公開してください。
+2. 公開Webmention受付とAtom・JF2購読を公開してください。
    - `Cloudflare > セキュリティ > セキュリティルール > カスタムルール` を開いてください。
    - ホスト名・GETとPOST を選択し、WAFやブラウザ整合性チェックなどをスキップしてください。
 
@@ -64,6 +64,14 @@ docker compose exec relay /indie-mezzanine healthcheck # リレーのHTTP、保�
 ```text
 https://relay.example/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.atom
 ```
+
+ビューワーは、同じcollectionを[JF2 Feed](https://jf2.spec.indieweb.org/)として取得できます。応答のメディアタイプは`application/jf2feed+json`です。Atomと同じスナップショットから生成し、entryの`uid`はsource URLです。
+
+```text
+https://relay.example/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.jf2
+```
+
+ビューワー本体とCORS許可はこのリレーの対象外です。写真はURLとしてだけ配信し、リレーは画像を取得・代理しません。
 
 ## バックアップ
 

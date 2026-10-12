@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -546,6 +547,10 @@ func TestE2EAndRestart(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	beforeJF2, e := JF2(target, id1, ps, 100)
+	if e != nil {
+		t.Fatal(e)
+	}
 	for _, change := range []struct {
 		body   string
 		status int
@@ -571,6 +576,10 @@ func TestE2EAndRestart(t *testing.T) {
 		if e != nil || !bytes.Equal(before, after) {
 			t.Fatal("Atom変動", e)
 		}
+		afterJF2, e := JF2(target, id1, ps, 100)
+		if e != nil || !bytes.Equal(beforeJF2, afterJF2) {
+			t.Fatal("JF2変動", e)
+		}
 	}
 	if _, _, e = s.Feed(ctx, id2, 100); e != ErrUnknown {
 		t.Fatal("所属移動", e)
@@ -583,6 +592,21 @@ func TestE2EAndRestart(t *testing.T) {
 		t.Fatal(res.StatusCode)
 	}
 	res.Body.Close()
+	res, e = http.Get(server.URL + "/collections/" + id1 + ".jf2")
+	if e != nil {
+		t.Fatal(e)
+	}
+	jf2Body, e := io.ReadAll(res.Body)
+	res.Body.Close()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "application/jf2feed+json" {
+		t.Fatal(res.StatusCode, res.Header.Get("Content-Type"))
+	}
+	if !bytes.Equal(jf2Body, beforeJF2) {
+		t.Fatal("E2EでJF2変動")
+	}
 	res, e = http.Get(server.URL + "/collections/" + id2 + ".atom")
 	if e != nil {
 		t.Fatal(e)
@@ -635,6 +659,10 @@ func TestE2EAndRestart(t *testing.T) {
 	after, e := Atom(target, id1, up, ps, 100)
 	if e != nil || !bytes.Equal(before, after) {
 		t.Fatal("復旧でAtom変動", e)
+	}
+	afterJF2, e := JF2(target, id1, ps, 100)
+	if e != nil || !bytes.Equal(beforeJF2, afterJF2) {
+		t.Fatal("復旧でJF2変動", e)
 	}
 	_, ps, e = s.Feed(ctx2, id2, 100)
 	if e != nil || len(ps) != 1 || ps[0].Source != fresh || !strings.Contains(ps[0].MF2, "restart") {
