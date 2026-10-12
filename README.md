@@ -59,19 +59,23 @@ docker compose exec relay /indie-mezzanine healthcheck # リレーのHTTP、保�
 - 受け付けると`HTTP 202`を返します。
 - 最初の検証に成功した内容のみ保存します。更新には対応していません。
 
+## 閲覧
+
 読者は、著者が`rel="collection"`で指定したUUIDをRSSリーダーなどで購読できます。
+
+### Atom Feed
 
 ```text
 https://relay.example/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.atom
 ```
 
-ビューワーは、同じcollectionを[JF2 Feed](https://jf2.spec.indieweb.org/)として取得できます。応答のメディアタイプは`application/jf2feed+json`です。Atomと同じスナップショットから生成し、entryの`uid`はsource URLです。
+### [JF2 Feed](https://jf2.spec.indieweb.org/)
+
+メディアタイプは`application/jf2feed+json`です。`email`はわざと消しています。
 
 ```text
 https://relay.example/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.jf2
 ```
-
-ビューワー本体とCORS許可はこのリレーの対象外です。写真はURLとしてだけ配信し、リレーは画像を取得・代理しません。
 
 ## バックアップ
 
