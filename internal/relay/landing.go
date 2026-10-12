@@ -32,7 +32,7 @@ func landingDocument(publicURL string) ([]byte, error) {
 	}
 	endpoint := strings.TrimRight(publicURL, "/") + "/webmention"
 	var doc bytes.Buffer
-	fmt.Fprintf(&doc, `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>%s</title><link rel="webmention" href="%s"></head><body>`, landingTitle, html.EscapeString(endpoint))
+	fmt.Fprintf(&doc, `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>%s</title><link rel="webmention" href="%s" /></head><body>`, landingTitle, html.EscapeString(endpoint))
 	doc.Write(entry)
 	doc.WriteString("</body></html>")
 	return doc.Bytes(), nil
