@@ -26,7 +26,7 @@ func TestSystemIdentity(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatal(w.Code)
 	}
-	for _, want := range []string{"<title>indie-mezzanine</title>", "<h1>indie-mezzanine</h1>"} {
+	for _, want := range []string{"<title>indie-mezzanine</title>", `<h1 class="p-name">indie-mezzanine</h1>`} {
 		if !strings.Contains(w.Body.String(), want) {
 			t.Fatalf("missing %s", want)
 		}

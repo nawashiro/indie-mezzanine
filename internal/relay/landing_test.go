@@ -6,6 +6,9 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
+	"willnorris.com/go/microformats"
 )
 
 func TestLandingDocumentDeterministic(t *testing.T) {
@@ -50,6 +53,43 @@ func TestLandingResolvesDestinations(t *testing.T) {
 	}
 }
 
+func TestLandingDocumentIsMF2Entry(t *testing.T) {
+	body, e := landingDocument(target)
+	if e != nil {
+		t.Fatal(e)
+	}
+	base, e := url.Parse(target)
+	if e != nil {
+		t.Fatal(e)
+	}
+	doc, e := html.Parse(bytes.NewReader(body))
+	if e != nil {
+		t.Fatal(e)
+	}
+	data := microformats.ParseNode(doc, base)
+	if len(data.Items) != 1 {
+		t.Fatalf("MF2 top-level entries = %d, want 1", len(data.Items))
+	}
+	entry := data.Items[0]
+	if len(entry.Type) != 1 || entry.Type[0] != "h-entry" {
+		t.Fatalf("entry type = %v, want [h-entry]", entry.Type)
+	}
+	if got := entry.Properties["name"]; len(got) != 1 || got[0] != landingTitle {
+		t.Fatalf("entry name = %v, want [%q]", got, landingTitle)
+	}
+	content := entry.Properties["content"]
+	if len(content) != 1 {
+		t.Fatalf("entry content = %v, want one e-content", content)
+	}
+	value, ok := content[0].(map[string]string)
+	if !ok {
+		t.Fatalf("entry content type = %T, want map[string]string", content[0])
+	}
+	if !strings.Contains(value["html"], "Webmention") || !strings.Contains(value["html"], "https://indieweb.org/Webmention") {
+		t.Fatalf("entry content omits description or its link: %s", value["html"])
+	}
+}
+
 func TestLandingDocumentRejectsBadBase(t *testing.T) {
 	if _, e := landingDocument("not-a-url"); e == nil {
 		t.Fatal("不正な公開URLを基底として受理")
@@ -75,7 +115,9 @@ func TestRootPageServesLanding(t *testing.T) {
 	body := w.Body.String()
 	for _, want := range []string{
 		"<title>indie-mezzanine</title>",
-		"<h1>indie-mezzanine</h1>",
+		`<h1 class="p-name">indie-mezzanine</h1>`,
+		`<article class="h-entry">`,
+		`<div class="e-content">`,
 		"投稿",
 		"閲覧",
 		`rel="webmention"`,
