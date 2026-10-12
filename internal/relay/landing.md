@@ -29,7 +29,7 @@
 例:
 
 - [Atom](/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.atom)
-- [JF2 Feed](/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.jf2) [仕様](https://jf2.spec.indieweb.org/):
+- [JF2 Feed](/collections/bbe44bfe-3a9c-410e-ad37-f1bf7402bce4.jf2) [仕様](https://jf2.spec.indieweb.org/)
 
 ## テクニック
 
